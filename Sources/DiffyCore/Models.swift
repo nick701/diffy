@@ -1,0 +1,138 @@
+import Foundation
+
+public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var displayName: String
+    public var path: String
+    public var editor: EditorPreference
+
+    public init(
+        id: UUID = UUID(),
+        displayName: String,
+        path: String,
+        editor: EditorPreference = .systemDefault
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.path = path
+        self.editor = editor
+    }
+}
+
+public enum EditorPreference: Codable, Hashable, Sendable {
+    case systemDefault
+    case appBundleIdentifier(String)
+    case command(String)
+}
+
+public struct RepoDiffSummary: Equatable, Sendable {
+    public var repository: RepositoryConfig
+    public var addedLines: Int
+    public var removedLines: Int
+    public var stagedFiles: [ChangedFileSummary]
+    public var unstagedFiles: [ChangedFileSummary]
+    public var refreshedAt: Date
+    public var errorMessage: String?
+
+    public init(
+        repository: RepositoryConfig,
+        addedLines: Int = 0,
+        removedLines: Int = 0,
+        stagedFiles: [ChangedFileSummary] = [],
+        unstagedFiles: [ChangedFileSummary] = [],
+        refreshedAt: Date = Date(),
+        errorMessage: String? = nil
+    ) {
+        self.repository = repository
+        self.addedLines = addedLines
+        self.removedLines = removedLines
+        self.stagedFiles = stagedFiles
+        self.unstagedFiles = unstagedFiles
+        self.refreshedAt = refreshedAt
+        self.errorMessage = errorMessage
+    }
+
+    public static func empty(for repository: RepositoryConfig) -> RepoDiffSummary {
+        RepoDiffSummary(repository: repository)
+    }
+}
+
+public struct ChangedFileSummary: Identifiable, Equatable, Hashable, Sendable {
+    public var id: String { "\(section.rawValue):\(path)" }
+    public var path: String
+    public var displayStatus: String
+    public var addedLines: Int
+    public var removedLines: Int
+    public var section: DiffSection
+    public var isBinary: Bool
+    public var isTooLarge: Bool
+
+    public init(
+        path: String,
+        displayStatus: String,
+        addedLines: Int,
+        removedLines: Int,
+        section: DiffSection,
+        isBinary: Bool = false,
+        isTooLarge: Bool = false
+    ) {
+        self.path = path
+        self.displayStatus = displayStatus
+        self.addedLines = addedLines
+        self.removedLines = removedLines
+        self.section = section
+        self.isBinary = isBinary
+        self.isTooLarge = isTooLarge
+    }
+}
+
+public enum DiffSection: String, Codable, Hashable, Sendable {
+    case staged
+    case unstaged
+}
+
+public struct FileLineStat: Equatable, Sendable {
+    public var addedLines: Int
+    public var removedLines: Int
+    public var isBinary: Bool
+    public var isTooLarge: Bool
+
+    public init(addedLines: Int, removedLines: Int, isBinary: Bool, isTooLarge: Bool = false) {
+        self.addedLines = addedLines
+        self.removedLines = removedLines
+        self.isBinary = isBinary
+        self.isTooLarge = isTooLarge
+    }
+}
+
+public struct GitPathStatus: Equatable, Sendable {
+    public var stagedStatus: GitChangeStatus?
+    public var unstagedStatus: GitChangeStatus?
+
+    public init(stagedStatus: GitChangeStatus?, unstagedStatus: GitChangeStatus?) {
+        self.stagedStatus = stagedStatus
+        self.unstagedStatus = unstagedStatus
+    }
+}
+
+public enum GitChangeStatus: Equatable, Sendable {
+    case modified
+    case added
+    case deleted
+    case renamed
+    case copied
+    case untracked
+    case conflicted
+
+    public var displayStatus: String {
+        switch self {
+        case .modified: "M"
+        case .added: "A"
+        case .deleted: "D"
+        case .renamed: "R"
+        case .copied: "C"
+        case .untracked: "U"
+        case .conflicted: "C"
+        }
+    }
+}
