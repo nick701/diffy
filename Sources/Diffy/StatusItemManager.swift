@@ -4,115 +4,128 @@ import DiffyCore
 import SwiftUI
 
 @MainActor
-final class StatusItemManager {
+final class StatusItemManager: NSObject {
     private let store: DiffyStore
-    private var controllers: [UUID: RepoStatusItemController] = [:]
-    private var emptyController: EmptyStatusItemController?
+    private let onOpenWindow: () -> Void
+    private let statusItem: NSStatusItem
+    private let popover: NSPopover
     private var cancellables: Set<AnyCancellable> = []
+    private var popoverDismissObservers: [NSObjectProtocol] = []
+    private var lastBadgeState: (added: Int, removed: Int, repoCount: Int, colors: DiffColors)?
 
-    init(store: DiffyStore) {
+    init(store: DiffyStore, onOpenWindow: @escaping () -> Void) {
         self.store = store
+        self.onOpenWindow = onOpenWindow
+        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        self.popover = NSPopover()
+        super.init()
+
+        popover.behavior = .transient
+        popover.contentSize = NSSize(width: 420, height: 520)
+        popover.contentViewController = NSHostingController(
+            rootView: PopoverContentView(store: store, onOpenWindow: { [weak self] in
+                self?.popover.performClose(nil)
+                self?.onOpenWindow()
+            })
+        )
+
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(handleClick(_:))
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+
+        installPopoverDismissObservers()
 
         store.$repositories
             .combineLatest(store.$summaries)
             .sink { [weak self] repositories, summaries in
-                self?.sync(repositories: repositories, summaries: summaries)
+                self?.updateBadge(repositories: repositories, summaries: summaries)
             }
             .store(in: &cancellables)
     }
 
-    private func sync(repositories: [RepositoryConfig], summaries: [UUID: RepoDiffSummary]) {
-        let ids = Set(repositories.map(\.id))
-        for removedID in Set(controllers.keys).subtracting(ids) {
-            controllers[removedID]?.dispose()
-            controllers.removeValue(forKey: removedID)
-        }
+    private func updateBadge(repositories: [RepositoryConfig], summaries: [UUID: RepoDiffSummary]) {
+        guard let button = statusItem.button else { return }
 
         if repositories.isEmpty {
-            if emptyController == nil {
-                emptyController = EmptyStatusItemController(store: store)
+            if lastBadgeState != nil {
+                button.image = nil
+                button.title = "Diffy"
+                button.imagePosition = .noImage
+                button.toolTip = "Diffy — no repositories"
+                lastBadgeState = nil
             }
-        } else {
-            emptyController?.dispose()
-            emptyController = nil
+            return
         }
 
+        var totalAdded = 0
+        var totalRemoved = 0
         for repository in repositories {
-            let controller = controllers[repository.id] ?? RepoStatusItemController(store: store, repositoryID: repository.id)
-            controllers[repository.id] = controller
-            controller.update(summary: summaries[repository.id] ?? .empty(for: repository))
+            if let summary = summaries[repository.id] {
+                totalAdded += summary.addedLines
+                totalRemoved += summary.removedLines
+            }
+        }
+
+        let colors = repositories.first?.diffColors ?? .default
+        let newState = (added: totalAdded, removed: totalRemoved, repoCount: repositories.count, colors: colors)
+        if let last = lastBadgeState,
+           last.added == newState.added,
+           last.removed == newState.removed,
+           last.repoCount == newState.repoCount,
+           last.colors == newState.colors {
+            return
+        }
+
+        button.title = ""
+        button.image = BadgeRenderer.image(added: totalAdded, removed: totalRemoved, colors: colors)
+        button.imagePosition = .imageOnly
+        button.toolTip = "Diffy — \(repositories.count) \(repositories.count == 1 ? "repo" : "repos")"
+        lastBadgeState = newState
+    }
+
+    @objc private func handleClick(_ sender: Any?) {
+        guard let event = NSApp.currentEvent else {
+            togglePopover()
+            return
+        }
+
+        if event.type == .rightMouseUp {
+            showContextMenu()
+        } else {
+            togglePopover()
         }
     }
-}
 
-@MainActor
-private final class RepoStatusItemController: NSObject {
-    private let store: DiffyStore
-    private let repositoryID: UUID
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    private let popover = NSPopover()
-    private var currentSummary: RepoDiffSummary?
-    private var notificationObservers: [NSObjectProtocol] = []
-
-    init(store: DiffyStore, repositoryID: UUID) {
-        self.store = store
-        self.repositoryID = repositoryID
-        super.init()
-
-        popover.behavior = .transient
-        popover.contentViewController = NSHostingController(rootView: RepoPopoverView(store: store, repositoryID: repositoryID))
-
-        statusItem.button?.target = self
-        statusItem.button?.action = #selector(togglePopover)
-
-        installCloseObservers()
-    }
-
-    func update(summary: RepoDiffSummary) {
-        currentSummary = summary
-        popover.contentSize = PopoverSizing.size(for: summary)
-        statusItem.button?.image = BadgeRenderer.image(added: summary.addedLines, removed: summary.removedLines, colors: summary.repository.diffColors)
-        statusItem.button?.imagePosition = .imageOnly
-        statusItem.button?.toolTip = summary.repository.displayName
-    }
-
-    func dispose() {
-        notificationObservers.forEach {
-            NotificationCenter.default.removeObserver($0)
-            NSWorkspace.shared.notificationCenter.removeObserver($0)
-        }
-        notificationObservers.removeAll()
-        NSStatusBar.system.removeStatusItem(statusItem)
-    }
-
-    @objc private func togglePopover() {
+    private func togglePopover() {
         guard let button = statusItem.button else { return }
-
         if popover.isShown {
             popover.performClose(nil)
         } else {
-            if let currentSummary {
-                popover.contentSize = PopoverSizing.size(for: currentSummary)
-            }
-            store.refresh(repositoryID: repositoryID)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
     }
 
-    private func installCloseObservers() {
-        notificationObservers.append(
-            NotificationCenter.default.addObserver(
-                forName: NSApplication.didResignActiveNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor in
-                    self?.popover.performClose(nil)
-                }
-            }
-        )
+    private func showContextMenu() {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Open Diffy", action: #selector(menuOpen), keyEquivalent: "").target = self
+        menu.addItem(NSMenuItem.separator())
+        let quit = menu.addItem(withTitle: "Quit Diffy", action: #selector(menuQuit), keyEquivalent: "q")
+        quit.target = self
+        statusItem.menu = menu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
+    }
 
-        notificationObservers.append(
+    @objc private func menuOpen() {
+        onOpenWindow()
+    }
+
+    @objc private func menuQuit() {
+        NSApp.terminate(nil)
+    }
+
+    private func installPopoverDismissObservers() {
+        popoverDismissObservers.append(
             NSWorkspace.shared.notificationCenter.addObserver(
                 forName: NSWorkspace.didActivateApplicationNotification,
                 object: nil,
@@ -122,74 +135,6 @@ private final class RepoStatusItemController: NSObject {
                     let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                     app.bundleIdentifier != Bundle.main.bundleIdentifier
                 else { return }
-
-                Task { @MainActor in
-                    self?.popover.performClose(nil)
-                }
-            }
-        )
-    }
-}
-
-@MainActor
-private final class EmptyStatusItemController: NSObject {
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    private let popover = NSPopover()
-    private var notificationObservers: [NSObjectProtocol] = []
-
-    init(store: DiffyStore) {
-        super.init()
-        popover.behavior = .transient
-        popover.contentSize = NSSize(width: 340, height: 160)
-        popover.contentViewController = NSHostingController(rootView: EmptyPopoverView(store: store))
-        statusItem.button?.title = "Diffy"
-        statusItem.button?.target = self
-        statusItem.button?.action = #selector(togglePopover)
-        installCloseObservers()
-    }
-
-    func dispose() {
-        notificationObservers.forEach {
-            NotificationCenter.default.removeObserver($0)
-            NSWorkspace.shared.notificationCenter.removeObserver($0)
-        }
-        notificationObservers.removeAll()
-        NSStatusBar.system.removeStatusItem(statusItem)
-    }
-
-    @objc private func togglePopover() {
-        guard let button = statusItem.button else { return }
-        if popover.isShown {
-            popover.performClose(nil)
-        } else {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        }
-    }
-
-    private func installCloseObservers() {
-        notificationObservers.append(
-            NotificationCenter.default.addObserver(
-                forName: NSApplication.didResignActiveNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor in
-                    self?.popover.performClose(nil)
-                }
-            }
-        )
-
-        notificationObservers.append(
-            NSWorkspace.shared.notificationCenter.addObserver(
-                forName: NSWorkspace.didActivateApplicationNotification,
-                object: nil,
-                queue: .main
-            ) { [weak self] notification in
-                guard
-                    let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                    app.bundleIdentifier != Bundle.main.bundleIdentifier
-                else { return }
-
                 Task { @MainActor in
                     self?.popover.performClose(nil)
                 }

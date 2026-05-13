@@ -14,13 +14,14 @@ v0.1.1— available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs a
 
 ## Features
 
-- One menu bar badge per configured repository
-- Repo-level `+x / -y` line counts in green and red
+- Single menu bar badge showing **aggregate** `+x / -y` line counts across every configured repo
+- Left-click the badge opens a popover listing every repo with its staged and unstaged files — click a file to jump straight into your editor
+- "Open Diffy" in the popover opens the full main window: sidebar lists every repo, detail pane shows that repo's changes plus its settings
+- Window close hides Diffy back to the menu bar (no quit); ⌘Q or right-click → Quit to actually exit
+- Per-repo detail pane: staged and unstaged changed-file sections with status labels (`M`, `A`, `D`, `U`, `C`) and per-file `+a / -b`
 - Per-repo colors for additions, removals, and optional badge background
-- Popover with staged and unstaged changed-file sections
-- Per-file status labels like `M`, `A`, `D`, `U`, and `C`
-- Per-file `+a / -b` counts
-- Open changed files in a configured editor
+- Open changed files in a configured editor (Xcode, Cursor, VS Code, Zed, or a custom shell command)
+- **Launch at Login** toggle (requires Diffy installed to `/Applications`)
 - Filesystem-triggered refresh with polling fallback
 - Sparkle-ready update packaging for GitHub Releases
 
