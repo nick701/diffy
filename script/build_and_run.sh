@@ -9,6 +9,7 @@ APP_DIR="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 clean_code_signing_xattrs() {
   local bundle_path="$1"
@@ -46,8 +47,12 @@ fi
 swift build
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR"
+mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR" "$RESOURCES_DIR"
 cp "$ROOT_DIR/.build/debug/$APP_NAME" "$MACOS_DIR/$APP_NAME"
+
+if [[ -f "$ROOT_DIR/Resources/Diffy.icns" ]]; then
+  cp "$ROOT_DIR/Resources/Diffy.icns" "$RESOURCES_DIR/Diffy.icns"
+fi
 
 SPARKLE_FRAMEWORK="$(find "$ROOT_DIR/.build" -path '*/Sparkle.framework' -type d | head -n 1 || true)"
 if [[ -n "$SPARKLE_FRAMEWORK" ]]; then
@@ -67,6 +72,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <string>$APP_NAME</string>
   <key>CFBundleDisplayName</key>
   <string>$APP_NAME</string>
+  <key>CFBundleIconFile</key>
+  <string>Diffy</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

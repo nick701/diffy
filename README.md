@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Resources/DiffyIcon-512.png" width="128" alt="Diffy icon">
+</p>
+
 # Diffy
 
 Diffy is a small native macOS menu bar app for solo developers. It watches local git repositories and shows live working-tree diff stats directly in the menu bar.
