@@ -38,27 +38,29 @@ The run script builds the SwiftPM target, creates `dist/Diffy.app`, ad-hoc signs
 ## Package a Release
 
 ```bash
-./script/package_release.sh 0.1.0 1
+./script/package_release.sh 0.1.1 2
 ```
 
-The zip is created at `dist/release/Diffy-0.1.0.zip`.
+The zip is created at `dist/release/Diffy-0.1.1.zip`.
 
 ## Install
 
-The easiest path is Homebrew. The `--no-quarantine` flag prevents the Gatekeeper dialog since Diffy is ad-hoc signed, not notarized:
+The easiest path is Homebrew:
 
 ```bash
 brew tap nick701/diffy
-brew install --cask --no-quarantine diffy
-```
-
-**Already installed without `--no-quarantine` and seeing a Gatekeeper dialog?** Run this once to clear it:
-
-```bash
+brew install --cask diffy
 xattr -dr com.apple.quarantine /Applications/Diffy.app
 ```
 
-Then reopen Diffy normally.
+The `xattr` step is required because Diffy is ad-hoc signed and not notarized — macOS will block it on first launch without it.
+
+To upgrade an existing install:
+
+```bash
+brew upgrade --cask diffy
+xattr -dr com.apple.quarantine /Applications/Diffy.app
+```
 
 ## Auto-Updates
 
