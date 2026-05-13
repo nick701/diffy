@@ -2,3 +2,9 @@
 dist/
 logs/
 .DS_Store
+
+# Local tooling / per-developer state
+CLAUDE.md
+.claude/
+.codex/
+.cookie-storage/
