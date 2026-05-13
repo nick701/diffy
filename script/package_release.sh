@@ -102,4 +102,4 @@ fi
 ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP_PATH"
 
 echo "Created $ZIP_PATH"
-echo "For Sparkle, run Sparkle's generate_appcast against $RELEASE_DIR after setting up an EdDSA key."
+echo "SHA256: $(shasum -a 256 "$ZIP_PATH" | cut -d' ' -f1)"
