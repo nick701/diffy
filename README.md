@@ -6,7 +6,7 @@ Diffy is local-only and read-only. It does not use GitHub, GitLab, Bitbucket, PR
 
 ## Status
 
-Early v1 implementation. The current UI uses macOS 26 Liquid Glass APIs and is unsigned/unnotarized, so macOS Gatekeeper will warn on first launch.
+v0.1.0 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not notarized). Install instructions below handle Gatekeeper automatically.
 
 ## Features
 
@@ -39,16 +39,22 @@ The run script builds the SwiftPM target, creates `dist/Diffy.app`, ad-hoc signs
 
 The zip is created at `dist/release/Diffy-0.1.0.zip`.
 
-## Download and Install
+## Install
 
-Once releases are published, download the zipped `.app` from GitHub Releases, unzip it, and move `Diffy.app` to `/Applications`.
+The easiest path is Homebrew. The `--no-quarantine` flag prevents the Gatekeeper dialog since Diffy is ad-hoc signed, not notarized:
 
-Because Diffy is unsigned and unnotarized, first launch requires a Gatekeeper override:
+```bash
+brew tap nick701/diffy
+brew install --cask --no-quarantine diffy
+```
 
-1. Try to open Diffy.
-2. Open **System Settings > Privacy & Security**.
-3. Click **Open Anyway** for Diffy.
-4. Confirm **Open**.
+**Already installed without `--no-quarantine` and seeing a Gatekeeper dialog?** Run this once to clear it:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Diffy.app
+```
+
+Then reopen Diffy normally.
 
 ## Auto-Updates
 
