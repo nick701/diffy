@@ -10,6 +10,33 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 
+clean_code_signing_xattrs() {
+  local bundle_path="$1"
+  local offenders
+
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    offenders="$(
+      xattr -lr "$bundle_path" 2>/dev/null \
+        | grep -E 'com.apple.FinderInfo|com.apple.fileprovider.fpfs#P|com.apple.ResourceFork' \
+        | sed 's/: com\.apple\..*//' \
+        | sort -u \
+        || true
+    )"
+
+    [[ -n "$offenders" ]] || break
+
+    while IFS= read -r file_path; do
+      [[ -n "$file_path" ]] || continue
+      xattr -d com.apple.FinderInfo "$file_path" 2>/dev/null || true
+      xattr -d 'com.apple.fileprovider.fpfs#P' "$file_path" 2>/dev/null || true
+      xattr -d -s com.apple.FinderInfo "$file_path" 2>/dev/null || true
+      xattr -d -s 'com.apple.fileprovider.fpfs#P' "$file_path" 2>/dev/null || true
+      xattr -c -s "$file_path" 2>/dev/null || true
+      xattr -c "$file_path" 2>/dev/null || true
+    done <<< "$offenders"
+  done
+}
+
 cd "$ROOT_DIR"
 
 if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
@@ -24,7 +51,7 @@ cp "$ROOT_DIR/.build/debug/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 
 SPARKLE_FRAMEWORK="$(find "$ROOT_DIR/.build" -path '*/Sparkle.framework' -type d | head -n 1 || true)"
 if [[ -n "$SPARKLE_FRAMEWORK" ]]; then
-  ditto "$SPARKLE_FRAMEWORK" "$FRAMEWORKS_DIR/Sparkle.framework"
+  ditto --norsrc "$SPARKLE_FRAMEWORK" "$FRAMEWORKS_DIR/Sparkle.framework"
 fi
 
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
@@ -47,7 +74,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>LSMinimumSystemVersion</key>
-  <string>14.0</string>
+  <string>26.0</string>
   <key>LSUIElement</key>
   <true/>
   <key>NSPrincipalClass</key>
@@ -56,8 +83,11 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 </plist>
 PLIST
 
-xattr -cr "$APP_DIR"
-codesign --force --sign - "$APP_DIR" >/dev/null
+clean_code_signing_xattrs "$APP_DIR"
+if ! codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>/dev/null; then
+  clean_code_signing_xattrs "$APP_DIR"
+  codesign --force --deep --sign - "$APP_DIR" >/dev/null
+fi
 
 case "${1:-}" in
   --verify)

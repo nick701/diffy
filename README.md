@@ -6,12 +6,13 @@ Diffy is local-only and read-only. It does not use GitHub, GitLab, Bitbucket, PR
 
 ## Status
 
-Early v1 implementation. The app is unsigned and unnotarized, so macOS Gatekeeper will warn on first launch.
+Early v1 implementation. The current UI uses macOS 26 Liquid Glass APIs and is unsigned/unnotarized, so macOS Gatekeeper will warn on first launch.
 
 ## Features
 
 - One menu bar badge per configured repository
 - Repo-level `+x / -y` line counts in green and red
+- Per-repo colors for additions, removals, and optional badge background
 - Popover with staged and unstaged changed-file sections
 - Per-file status labels like `M`, `A`, `D`, `U`, and `C`
 - Per-file `+a / -b` counts

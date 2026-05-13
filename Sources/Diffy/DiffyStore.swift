@@ -72,10 +72,14 @@ final class DiffyStore: ObservableObject {
     func updateEditor(for repository: RepositoryConfig, editor: EditorPreference) {
         guard let index = repositories.firstIndex(where: { $0.id == repository.id }) else { return }
         repositories[index].editor = editor
-        if var summary = summaries[repository.id] {
-            summary.repository = repositories[index]
-            summaries[repository.id] = summary
-        }
+        updateSummaryRepository(repositories[index])
+        save()
+    }
+
+    func updateDiffColors(for repository: RepositoryConfig, diffColors: DiffColors) {
+        guard let index = repositories.firstIndex(where: { $0.id == repository.id }) else { return }
+        repositories[index].diffColors = diffColors
+        updateSummaryRepository(repositories[index])
         save()
     }
 
@@ -125,6 +129,13 @@ final class DiffyStore: ObservableObject {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Diffy", isDirectory: true)
             .appendingPathComponent("repositories.json")
+    }
+
+    private func updateSummaryRepository(_ repository: RepositoryConfig) {
+        if var summary = summaries[repository.id] {
+            summary.repository = repository
+            summaries[repository.id] = summary
+        }
     }
 }
 

@@ -51,6 +51,8 @@ private final class RepoStatusItemController: NSObject {
     private let repositoryID: UUID
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
+    private var currentSummary: RepoDiffSummary?
+    private var notificationObservers: [NSObjectProtocol] = []
 
     init(store: DiffyStore, repositoryID: UUID) {
         self.store = store
@@ -58,19 +60,28 @@ private final class RepoStatusItemController: NSObject {
         super.init()
 
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 420, height: 480)
         popover.contentViewController = NSHostingController(rootView: RepoPopoverView(store: store, repositoryID: repositoryID))
 
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePopover)
+
+        installCloseObservers()
     }
 
     func update(summary: RepoDiffSummary) {
-        statusItem.button?.attributedTitle = BadgeFormatter.badge(added: summary.addedLines, removed: summary.removedLines)
+        currentSummary = summary
+        popover.contentSize = PopoverSizing.size(for: summary)
+        statusItem.button?.image = BadgeRenderer.image(added: summary.addedLines, removed: summary.removedLines, colors: summary.repository.diffColors)
+        statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.toolTip = summary.repository.displayName
     }
 
     func dispose() {
+        notificationObservers.forEach {
+            NotificationCenter.default.removeObserver($0)
+            NSWorkspace.shared.notificationCenter.removeObserver($0)
+        }
+        notificationObservers.removeAll()
         NSStatusBar.system.removeStatusItem(statusItem)
     }
 
@@ -80,9 +91,43 @@ private final class RepoStatusItemController: NSObject {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            if let currentSummary {
+                popover.contentSize = PopoverSizing.size(for: currentSummary)
+            }
             store.refresh(repositoryID: repositoryID)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
+    }
+
+    private func installCloseObservers() {
+        notificationObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: NSApplication.didResignActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.popover.performClose(nil)
+                }
+            }
+        )
+
+        notificationObservers.append(
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard
+                    let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                    app.bundleIdentifier != Bundle.main.bundleIdentifier
+                else { return }
+
+                Task { @MainActor in
+                    self?.popover.performClose(nil)
+                }
+            }
+        )
     }
 }
 
@@ -90,6 +135,7 @@ private final class RepoStatusItemController: NSObject {
 private final class EmptyStatusItemController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
+    private var notificationObservers: [NSObjectProtocol] = []
 
     init(store: DiffyStore) {
         super.init()
@@ -99,9 +145,15 @@ private final class EmptyStatusItemController: NSObject {
         statusItem.button?.title = "Diffy"
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePopover)
+        installCloseObservers()
     }
 
     func dispose() {
+        notificationObservers.forEach {
+            NotificationCenter.default.removeObserver($0)
+            NSWorkspace.shared.notificationCenter.removeObserver($0)
+        }
+        notificationObservers.removeAll()
         NSStatusBar.system.removeStatusItem(statusItem)
     }
 
@@ -113,15 +165,35 @@ private final class EmptyStatusItemController: NSObject {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
     }
-}
 
-private enum BadgeFormatter {
-    static func badge(added: Int, removed: Int) -> NSAttributedString {
-        let text = NSMutableAttributedString()
-        let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .medium)
-        text.append(NSAttributedString(string: "+\(added)", attributes: [.foregroundColor: NSColor.systemGreen, .font: font]))
-        text.append(NSAttributedString(string: " / ", attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: font]))
-        text.append(NSAttributedString(string: "-\(removed)", attributes: [.foregroundColor: NSColor.systemRed, .font: font]))
-        return text
+    private func installCloseObservers() {
+        notificationObservers.append(
+            NotificationCenter.default.addObserver(
+                forName: NSApplication.didResignActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.popover.performClose(nil)
+                }
+            }
+        )
+
+        notificationObservers.append(
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard
+                    let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                    app.bundleIdentifier != Bundle.main.bundleIdentifier
+                else { return }
+
+                Task { @MainActor in
+                    self?.popover.performClose(nil)
+                }
+            }
+        )
     }
 }

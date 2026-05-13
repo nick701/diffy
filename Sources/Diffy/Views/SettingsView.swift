@@ -88,7 +88,32 @@ private struct RepositorySettingsRow: View {
                         .textFieldStyle(.roundedBorder)
                         .onSubmit {
                             store.updateEditor(for: repository, editor: .command(customCommand))
-                        }
+                    }
+                }
+            }
+
+            HStack(spacing: 12) {
+                ColorPicker("Additions", selection: additionColor)
+                    .labelsHidden()
+                    .help("Addition color")
+
+                ColorPicker("Removals", selection: removalColor)
+                    .labelsHidden()
+                    .help("Removal color")
+
+                ColorPicker("Badge", selection: badgeBackgroundColor)
+                    .labelsHidden()
+                    .help("Menu bar badge background")
+
+                Button("Clear Background") {
+                    var colors = repository.diffColors
+                    colors.badgeBackgroundHex = nil
+                    store.updateDiffColors(for: repository, diffColors: colors)
+                }
+                .disabled(repository.diffColors.badgeBackgroundHex == nil)
+
+                Button("Reset Colors") {
+                    store.updateDiffColors(for: repository, diffColors: .default)
                 }
             }
         }
@@ -115,6 +140,39 @@ private struct RepositorySettingsRow: View {
             } else {
                 store.updateEditor(for: repository, editor: choice.editor)
             }
+        }
+    }
+
+    private var additionColor: Binding<Color> {
+        Binding {
+            AppColor.swiftUIColor(hex: repository.diffColors.additionHex)
+        } set: { color in
+            var colors = repository.diffColors
+            colors.additionHex = AppColor.hex(color)
+            store.updateDiffColors(for: repository, diffColors: colors)
+        }
+    }
+
+    private var removalColor: Binding<Color> {
+        Binding {
+            AppColor.swiftUIColor(hex: repository.diffColors.removalHex)
+        } set: { color in
+            var colors = repository.diffColors
+            colors.removalHex = AppColor.hex(color)
+            store.updateDiffColors(for: repository, diffColors: colors)
+        }
+    }
+
+    private var badgeBackgroundColor: Binding<Color> {
+        Binding {
+            if let hex = repository.diffColors.badgeBackgroundHex {
+                return AppColor.swiftUIColor(hex: hex)
+            }
+            return .clear
+        } set: { color in
+            var colors = repository.diffColors
+            colors.badgeBackgroundHex = AppColor.hex(color)
+            store.updateDiffColors(for: repository, diffColors: colors)
         }
     }
 }

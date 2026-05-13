@@ -2,6 +2,8 @@
 
 Diffy releases are unsigned and unnotarized until the project has an Apple Developer ID.
 
+Current builds require macOS 26 because Diffy uses Liquid Glass APIs.
+
 ## Local Release
 
 Run from the Mac terminal:

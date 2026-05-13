@@ -5,17 +5,46 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
     public var displayName: String
     public var path: String
     public var editor: EditorPreference
+    public var diffColors: DiffColors
 
     public init(
         id: UUID = UUID(),
         displayName: String,
         path: String,
-        editor: EditorPreference = .systemDefault
+        editor: EditorPreference = .systemDefault,
+        diffColors: DiffColors = .default
     ) {
         self.id = id
         self.displayName = displayName
         self.path = path
         self.editor = editor
+        self.diffColors = diffColors
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case displayName
+        case path
+        case editor
+        case diffColors
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        path = try container.decode(String.self, forKey: .path)
+        editor = try container.decodeIfPresent(EditorPreference.self, forKey: .editor) ?? .systemDefault
+        diffColors = try container.decodeIfPresent(DiffColors.self, forKey: .diffColors) ?? .default
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(displayName, forKey: .displayName)
+        try container.encode(path, forKey: .path)
+        try container.encode(editor, forKey: .editor)
+        try container.encode(diffColors, forKey: .diffColors)
     }
 }
 
@@ -23,6 +52,24 @@ public enum EditorPreference: Codable, Hashable, Sendable {
     case systemDefault
     case appBundleIdentifier(String)
     case command(String)
+}
+
+public struct DiffColors: Codable, Hashable, Sendable {
+    public static let `default` = DiffColors(
+        additionHex: "#34C759",
+        removalHex: "#FF3B30",
+        badgeBackgroundHex: nil
+    )
+
+    public var additionHex: String
+    public var removalHex: String
+    public var badgeBackgroundHex: String?
+
+    public init(additionHex: String, removalHex: String, badgeBackgroundHex: String? = nil) {
+        self.additionHex = additionHex
+        self.removalHex = removalHex
+        self.badgeBackgroundHex = badgeBackgroundHex
+    }
 }
 
 public struct RepoDiffSummary: Equatable, Sendable {

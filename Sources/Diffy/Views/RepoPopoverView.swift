@@ -14,32 +14,45 @@ struct RepoPopoverView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider()
+        GlassEffectContainer(spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                Divider()
 
-            if let repository, let summary {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if let error = summary.errorMessage {
-                            ErrorBanner(message: error)
+                if let repository, let summary {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if let error = summary.errorMessage {
+                                ErrorBanner(message: error)
+                            }
+
+                            FileSectionView(
+                                title: "Staged",
+                                files: summary.stagedFiles,
+                                repository: repository,
+                                diffColors: repository.diffColors
+                            )
+                            FileSectionView(
+                                title: "Unstaged",
+                                files: summary.unstagedFiles,
+                                repository: repository,
+                                diffColors: repository.diffColors
+                            )
+
+                            if summary.stagedFiles.isEmpty && summary.unstagedFiles.isEmpty && summary.errorMessage == nil {
+                                EmptyStateView(message: "No local changes")
+                            }
                         }
-
-                        FileSectionView(title: "Staged", files: summary.stagedFiles, repository: repository)
-                        FileSectionView(title: "Unstaged", files: summary.unstagedFiles, repository: repository)
-
-                        if summary.stagedFiles.isEmpty && summary.unstagedFiles.isEmpty && summary.errorMessage == nil {
-                            EmptyStateView(message: "No local changes")
-                        }
+                        .padding(12)
                     }
-                    .padding(12)
+                } else {
+                    EmptyStateView(message: "Repository not found")
+                        .padding()
                 }
-            } else {
-                EmptyStateView(message: "Repository not found")
-                    .padding()
             }
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
-        .frame(width: 420, height: 480)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var header: some View {
@@ -79,6 +92,7 @@ private struct FileSectionView: View {
     let title: String
     let files: [ChangedFileSummary]
     let repository: RepositoryConfig
+    let diffColors: DiffColors
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -99,12 +113,12 @@ private struct FileSectionView: View {
                         Button {
                             EditorLauncher.open(file: file, in: repository)
                         } label: {
-                            FileRowView(file: file)
+                            FileRowView(file: file, diffColors: diffColors)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         }
     }
@@ -112,6 +126,7 @@ private struct FileSectionView: View {
 
 private struct FileRowView: View {
     let file: ChangedFileSummary
+    let diffColors: DiffColors
 
     var body: some View {
         HStack(spacing: 10) {
@@ -140,11 +155,11 @@ private struct FileRowView: View {
             } else {
                 HStack(spacing: 4) {
                     Text("+\(file.addedLines)")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(AppColor.swiftUIColor(hex: diffColors.additionHex))
                     Text("/")
                         .foregroundStyle(.secondary)
                     Text("-\(file.removedLines)")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(AppColor.swiftUIColor(hex: diffColors.removalHex))
                 }
                 .font(.system(.caption, design: .monospaced).weight(.medium))
                 .frame(width: 72, alignment: .trailing)
@@ -152,7 +167,6 @@ private struct FileRowView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
-        .background(Color(nsColor: .controlBackgroundColor))
         .contentShape(Rectangle())
     }
 }
@@ -178,6 +192,6 @@ private struct EmptyStateView: View {
         Text(message)
             .font(.callout)
             .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, minHeight: 80)
+            .frame(maxWidth: .infinity, minHeight: 44)
     }
 }
