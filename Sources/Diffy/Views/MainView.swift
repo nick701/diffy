@@ -255,6 +255,7 @@ private struct GroupSectionView: View {
             }
         }
         .padding(.horizontal, 10)
+        .opacity(group.isHidden ? 0.6 : 1)
         .onAppear {
             nameDraft = group.name
         }
@@ -301,6 +302,14 @@ private struct GroupSectionView: View {
                         .padding(12)
                         .frame(width: 320)
                 }
+
+                Button {
+                    store.setGroupHidden(group.id, isHidden: !group.isHidden)
+                } label: {
+                    Image(systemName: group.isHidden ? "eye.slash" : "eye")
+                }
+                .buttonStyle(.borderless)
+                .help(group.isHidden ? "Show in menu bar" : "Hide from menu bar")
 
                 Button {
                     moveGroupUp()

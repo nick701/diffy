@@ -33,21 +33,34 @@ final class StatusItemManager: NSObject {
         repositories: [RepositoryConfig],
         summaries: [UUID: RepoDiffSummary]
     ) {
-        let desiredOrder = groups.map { $0.id }
-        let structureChanged = desiredOrder != groupOrder
+        let desiredOrder = groups.filter { !$0.isHidden }.map { $0.id }
 
-        if structureChanged {
-            // Remove all status items and rebuild in current group order so the menu-bar
-            // sequence matches `store.groups`. AppKit does not expose direct reordering.
-            for (_, item) in items {
-                NSStatusBar.system.removeStatusItem(item.statusItem)
+        if desiredOrder != groupOrder {
+            // If the new order is the current order with some entries removed
+            // (i.e. pure deletion / hide), only tear down the gone items so the
+            // surviving icons don't flicker. Any reorder or addition falls back
+            // to a full rebuild because AppKit appends new status items to the end.
+            let isPureDeletion = groupOrder.filter { desiredOrder.contains($0) } == desiredOrder
+
+            if isPureDeletion {
+                let removed = Set(groupOrder).subtracting(desiredOrder)
+                for id in removed {
+                    if let item = items[id] {
+                        NSStatusBar.system.removeStatusItem(item.statusItem)
+                        items.removeValue(forKey: id)
+                    }
+                }
+            } else {
+                for (_, item) in items {
+                    NSStatusBar.system.removeStatusItem(item.statusItem)
+                }
+                items.removeAll(keepingCapacity: true)
+                for group in groups where !group.isHidden {
+                    items[group.id] = makeStatusItem(for: group)
+                }
             }
-            items.removeAll(keepingCapacity: true)
+
             groupOrder = desiredOrder
-
-            for group in groups {
-                items[group.id] = makeStatusItem(for: group)
-            }
         }
 
         for group in groups {

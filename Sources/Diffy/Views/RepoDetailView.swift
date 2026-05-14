@@ -140,7 +140,7 @@ struct RepoDetailView: View {
                 }
             }
 
-            Toggle("Hide from menu bar", isOn: hiddenBinding(for: repository))
+            Toggle("Exclude from group totals", isOn: hiddenBinding(for: repository))
                 .toggleStyle(.switch)
 
             Button(role: .destructive) {

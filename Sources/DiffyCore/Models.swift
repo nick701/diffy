@@ -100,17 +100,20 @@ public struct RepositoryGroup: Identifiable, Codable, Hashable, Sendable {
     public var name: String
     public var diffColors: DiffColors
     public var badgeLabel: BadgeLabel?
+    public var isHidden: Bool
 
     public init(
         id: UUID = UUID(),
         name: String,
         diffColors: DiffColors = .default,
-        badgeLabel: BadgeLabel? = nil
+        badgeLabel: BadgeLabel? = nil,
+        isHidden: Bool = false
     ) {
         self.id = id
         self.name = name
         self.diffColors = diffColors
         self.badgeLabel = badgeLabel
+        self.isHidden = isHidden
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -118,6 +121,7 @@ public struct RepositoryGroup: Identifiable, Codable, Hashable, Sendable {
         case name
         case diffColors
         case badgeLabel
+        case isHidden
     }
 
     public init(from decoder: Decoder) throws {
@@ -126,6 +130,7 @@ public struct RepositoryGroup: Identifiable, Codable, Hashable, Sendable {
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         diffColors = try container.decodeIfPresent(DiffColors.self, forKey: .diffColors) ?? .default
         badgeLabel = try container.decodeIfPresent(BadgeLabel.self, forKey: .badgeLabel)
+        isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -134,6 +139,7 @@ public struct RepositoryGroup: Identifiable, Codable, Hashable, Sendable {
         try container.encode(name, forKey: .name)
         try container.encode(diffColors, forKey: .diffColors)
         try container.encodeIfPresent(badgeLabel, forKey: .badgeLabel)
+        try container.encode(isHidden, forKey: .isHidden)
     }
 }
 

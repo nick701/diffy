@@ -142,6 +142,13 @@ final class DiffyStore: ObservableObject {
         save()
     }
 
+    func setGroupHidden(_ groupID: UUID, isHidden: Bool) {
+        guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return }
+        guard groups[index].isHidden != isHidden else { return }
+        groups[index].isHidden = isHidden
+        save()
+    }
+
     func reorderGroups(_ orderedIDs: [UUID]) {
         let byID = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
         var reordered: [RepositoryGroup] = []
