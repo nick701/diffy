@@ -16,6 +16,21 @@ public protocol GitProcessRunning: Sendable {
     func run(_ command: GitCommand) throws -> String
 }
 
+private final class DataBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+
+    func append(_ chunk: Data) {
+        lock.lock(); defer { lock.unlock() }
+        data.append(chunk)
+    }
+
+    func snapshot() -> Data {
+        lock.lock(); defer { lock.unlock() }
+        return data
+    }
+}
+
 public struct GitProcessRunner: GitProcessRunning, Sendable {
     public init() {}
 
@@ -30,12 +45,11 @@ public struct GitProcessRunner: GitProcessRunning, Sendable {
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
-        let lock = NSLock()
-        var outputData = Data()
-        var errorData = Data()
+        let outputData = DataBox()
+        let errorData = DataBox()
         let group = DispatchGroup()
 
-        func attach(_ handle: FileHandle, into sink: @escaping (Data) -> Void) {
+        func attach(_ handle: FileHandle, into sink: @escaping @Sendable (Data) -> Void) {
             group.enter()
             handle.readabilityHandler = { fh in
                 let chunk = fh.availableData
@@ -49,10 +63,10 @@ public struct GitProcessRunner: GitProcessRunning, Sendable {
         }
 
         attach(outputPipe.fileHandleForReading) { chunk in
-            lock.lock(); outputData.append(chunk); lock.unlock()
+            outputData.append(chunk)
         }
         attach(errorPipe.fileHandleForReading) { chunk in
-            lock.lock(); errorData.append(chunk); lock.unlock()
+            errorData.append(chunk)
         }
 
         do {
@@ -67,8 +81,8 @@ public struct GitProcessRunner: GitProcessRunning, Sendable {
         process.waitUntilExit()
         group.wait()
 
-        let output = String(data: outputData, encoding: .utf8) ?? ""
-        let error = String(data: errorData, encoding: .utf8) ?? ""
+        let output = String(data: outputData.snapshot(), encoding: .utf8) ?? ""
+        let error = String(data: errorData.snapshot(), encoding: .utf8) ?? ""
 
         guard process.terminationStatus == 0 else {
             throw GitClientError.commandFailed(error.trimmingCharacters(in: .whitespacesAndNewlines))

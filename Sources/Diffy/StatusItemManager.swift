@@ -9,6 +9,7 @@ final class StatusItemManager: NSObject {
     private let onOpenWindow: () -> Void
     private var cancellables: Set<AnyCancellable> = []
     private var popoverDismissObservers: [NSObjectProtocol] = []
+    private var globalMouseMonitor: Any?
     private var items: [UUID: GroupStatusItem] = [:]
     private var groupOrder: [UUID] = []
 
@@ -185,6 +186,15 @@ final class StatusItemManager: NSObject {
                 }
             }
         )
+
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                for item in self.items.values where item.popover.isShown {
+                    item.popover.performClose(nil)
+                }
+            }
+        }
     }
 }
 

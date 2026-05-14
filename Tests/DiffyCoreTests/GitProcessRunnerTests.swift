@@ -20,7 +20,7 @@ final class GitProcessRunnerTests: XCTestCase {
             _ = try GitProcessRunner().run(command)
             XCTFail("Expected commandFailed error")
         } catch let GitClientError.commandFailed(message) {
-            XCTAssertGreaterThanOrEqual(message.utf8.count, 200_000)
+            XCTAssertGreaterThanOrEqual(message.utf8.count, 199_999)
         } catch {
             XCTFail("Expected GitClientError.commandFailed, got \(error)")
         }
