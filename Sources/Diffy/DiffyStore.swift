@@ -213,6 +213,7 @@ final class DiffyStore: ObservableObject {
             }
 
             await MainActor.run {
+                guard self.repositories.contains(where: { $0.id == repository.id }) else { return }
                 self.summaries[repository.id] = result
             }
         }

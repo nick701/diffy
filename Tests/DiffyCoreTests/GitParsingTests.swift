@@ -3,12 +3,7 @@ import XCTest
 
 final class GitParsingTests: XCTestCase {
     func testParsesNumstatForTextBinaryAndDeletedFiles() {
-        let output = """
-        12\t3\tSources/App.swift
-        -\t-\tAssets/logo.png
-        0\t8\tSources/Removed.swift
-
-        """
+        let output = "12\t3\tSources/App.swift\u{0}-\t-\tAssets/logo.png\u{0}0\t8\tSources/Removed.swift\u{0}"
 
         let stats = GitNumstatParser.parse(output)
 
@@ -17,6 +12,29 @@ final class GitParsingTests: XCTestCase {
         XCTAssertEqual(stats["Assets/logo.png"]?.isBinary, true)
         XCTAssertEqual(stats["Assets/logo.png"]?.addedLines, 0)
         XCTAssertEqual(stats["Sources/Removed.swift"]?.removedLines, 8)
+    }
+
+    func testParsesNumstatForUnicodeFilenames() {
+        let output = "4\t2\tSources/мир.swift\u{0}1\t0\tassets/🚀.png\u{0}"
+
+        let stats = GitNumstatParser.parse(output)
+
+        XCTAssertEqual(stats["Sources/мир.swift"]?.addedLines, 4)
+        XCTAssertEqual(stats["Sources/мир.swift"]?.removedLines, 2)
+        XCTAssertEqual(stats["assets/🚀.png"]?.addedLines, 1)
+    }
+
+    func testParsesNumstatForRenamedPath() {
+        // Rename record: `<added>\t<removed>\t\0<oldpath>\0<newpath>\0`.
+        let output = "5\t3\t\u{0}src/old.swift\u{0}src/new.swift\u{0}9\t1\tSources/Other.swift\u{0}"
+
+        let stats = GitNumstatParser.parse(output)
+
+        XCTAssertEqual(stats["src/new.swift"]?.addedLines, 5)
+        XCTAssertEqual(stats["src/new.swift"]?.removedLines, 3)
+        XCTAssertNil(stats["src/old.swift"])
+        XCTAssertNil(stats["{old.swift => new.swift}"])
+        XCTAssertEqual(stats["Sources/Other.swift"]?.addedLines, 9)
     }
 
     func testParsesPorcelainStatusForTrackedUntrackedAndConflictStates() {
@@ -29,6 +47,15 @@ final class GitParsingTests: XCTestCase {
         XCTAssertEqual(statuses["Scratch.txt"]?.unstagedStatus, .untracked)
         XCTAssertEqual(statuses["Conflict.swift"]?.unstagedStatus, .conflicted)
         XCTAssertEqual(statuses["Removed.swift"]?.unstagedStatus, .deleted)
+    }
+
+    func testConflictedAndCopiedHaveDistinctDisplayGlyphs() {
+        XCTAssertEqual(GitChangeStatus.copied.displayStatus, "C")
+        XCTAssertEqual(GitChangeStatus.conflicted.displayStatus, "!")
+        XCTAssertNotEqual(
+            GitChangeStatus.conflicted.displayStatus,
+            GitChangeStatus.copied.displayStatus
+        )
     }
 
     func testBuildsSummaryWithSeparateStagedAndUnstagedSections() {

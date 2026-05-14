@@ -1,21 +1,44 @@
 import Foundation
 
 public enum GitNumstatParser {
+    /// Parses `git diff --numstat -z` output. Records are NUL-terminated;
+    /// renames take the form `<added>\t<removed>\t\0<oldpath>\0<newpath>\0`,
+    /// normal records take `<added>\t<removed>\t<path>\0`.
     public static func parse(_ output: String) -> [String: FileLineStat] {
         var stats: [String: FileLineStat] = [:]
+        var index = output.startIndex
 
-        for line in output.split(whereSeparator: \.isNewline) {
-            let parts = line.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
-            guard parts.count == 3 else { continue }
+        while index < output.endIndex {
+            guard let added = consume(output, from: &index, until: "\t"),
+                  let removed = consume(output, from: &index, until: "\t"),
+                  index < output.endIndex else { break }
 
-            let path = String(parts[2])
-            let isBinary = parts[0] == "-" || parts[1] == "-"
-            let added = Int(parts[0]) ?? 0
-            let removed = Int(parts[1]) ?? 0
-            stats[path] = FileLineStat(addedLines: added, removedLines: removed, isBinary: isBinary)
+            let path: Substring?
+            if output[index] == "\u{0}" {
+                index = output.index(after: index)
+                _ = consume(output, from: &index, until: "\u{0}")  // discard old path
+                path = consume(output, from: &index, until: "\u{0}")
+            } else {
+                path = consume(output, from: &index, until: "\u{0}")
+            }
+            guard let path else { break }
+
+            let isBinary = added == "-" || removed == "-"
+            stats[String(path)] = FileLineStat(
+                addedLines: Int(added) ?? 0,
+                removedLines: Int(removed) ?? 0,
+                isBinary: isBinary
+            )
         }
 
         return stats
+    }
+
+    private static func consume(_ output: String, from index: inout String.Index, until terminator: Character) -> Substring? {
+        guard let end = output[index...].firstIndex(of: terminator) else { return nil }
+        let value = output[index..<end]
+        index = output.index(after: end)
+        return value
     }
 }
 

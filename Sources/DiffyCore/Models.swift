@@ -250,7 +250,8 @@ public enum GitChangeStatus: Equatable, Sendable {
         case .renamed: "R"
         case .copied: "C"
         case .untracked: "U"
-        case .conflicted: "C"
+        // Diffy-specific glyph: git porcelain uses "U"/"UU" for conflicts, but "U" is taken by .untracked.
+        case .conflicted: "!"
         }
     }
 }

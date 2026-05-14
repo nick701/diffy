@@ -1,3 +1,4 @@
+import AppKit
 import DiffyCore
 import SwiftUI
 
@@ -58,7 +59,11 @@ struct GroupColorEditor: View {
             return .clear
         } set: { color in
             var colors = group.diffColors
-            colors[keyPath: keyPath] = AppColor.hex(color)
+            if let alpha = NSColor(color).usingColorSpace(.sRGB)?.alphaComponent, alpha >= 0.01 {
+                colors[keyPath: keyPath] = AppColor.hex(color)
+            } else {
+                colors[keyPath: keyPath] = nil
+            }
             store.updateGroupColors(group.id, diffColors: colors)
         }
     }

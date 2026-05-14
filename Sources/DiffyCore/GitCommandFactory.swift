@@ -24,14 +24,14 @@ public enum GitCommandFactory {
     }
 
     public static func command(for kind: GitReadCommandKind, repositoryPath: String) -> GitCommand {
-        let base = ["-C", repositoryPath, "--no-optional-locks"]
+        let base = ["-C", repositoryPath, "--no-optional-locks", "-c", "core.quotePath=false"]
         let suffix: [String]
 
         switch kind {
         case .stagedNumstat:
-            suffix = ["diff", "--cached", "--numstat"]
+            suffix = ["diff", "--cached", "--numstat", "-z"]
         case .unstagedNumstat:
-            suffix = ["diff", "--numstat"]
+            suffix = ["diff", "--numstat", "-z"]
         case .porcelainStatus:
             suffix = ["status", "--porcelain=v1", "-z", "--untracked-files=all"]
         }
