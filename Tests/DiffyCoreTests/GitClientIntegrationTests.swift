@@ -13,7 +13,7 @@ final class GitClientIntegrationTests: XCTestCase {
         try repo.git("add", "staged.txt")
         try repo.write("untracked.txt", contents: "new\nfile\n")
 
-        let config = RepositoryConfig(displayName: "Temp", path: repo.path)
+        let config = RepositoryConfig(displayName: "Temp", path: repo.path, groupID: UUID())
         let summary = try GitClient().summarize(config)
 
         XCTAssertEqual(summary.stagedFiles.map(\.path), ["staged.txt"])

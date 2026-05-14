@@ -2,8 +2,14 @@ import Combine
 import DiffyCore
 import Foundation
 
+enum GroupRemovalMode {
+    case dissolveIntoStandalone
+    case deleteRepos
+}
+
 @MainActor
 final class DiffyStore: ObservableObject {
+    @Published private(set) var groups: [RepositoryGroup] = []
     @Published private(set) var repositories: [RepositoryConfig] = []
     @Published private(set) var summaries: [UUID: RepoDiffSummary] = [:]
 
@@ -18,13 +24,16 @@ final class DiffyStore: ObservableObject {
 
     func load() {
         guard let data = try? Data(contentsOf: storageURL) else { return }
-        repositories = (try? JSONDecoder().decode([RepositoryConfig].self, from: data)) ?? []
+        guard let state = try? StoredStateMigration.decode(data) else { return }
+        groups = state.groups
+        repositories = state.repositories
     }
 
     func save() {
         do {
             try FileManager.default.createDirectory(at: storageURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(repositories)
+            let state = StoredState(groups: groups, repositories: repositories)
+            let data = try JSONEncoder().encode(state)
             try data.write(to: storageURL, options: .atomic)
         } catch {
             NSLog("Diffy failed to save repositories: \(error.localizedDescription)")
@@ -49,11 +58,20 @@ final class DiffyStore: ObservableObject {
         watchers.removeAll()
     }
 
+    // MARK: - Repositories
+
     func addRepository(path: String) {
         let url = URL(fileURLWithPath: path)
         guard repositories.contains(where: { $0.path == url.path }) == false else { return }
 
-        let config = RepositoryConfig(displayName: url.lastPathComponent, path: url.path)
+        let group = RepositoryGroup(name: url.lastPathComponent)
+        groups.append(group)
+
+        let config = RepositoryConfig(
+            displayName: url.lastPathComponent,
+            path: url.path,
+            groupID: group.id
+        )
         repositories.append(config)
         summaries[config.id] = .empty(for: config)
         save()
@@ -76,12 +94,98 @@ final class DiffyStore: ObservableObject {
         save()
     }
 
-    func updateDiffColors(for repository: RepositoryConfig, diffColors: DiffColors) {
-        guard let index = repositories.firstIndex(where: { $0.id == repository.id }) else { return }
-        repositories[index].diffColors = diffColors
+    func setHidden(_ repositoryID: UUID, isHidden: Bool) {
+        guard let index = repositories.firstIndex(where: { $0.id == repositoryID }) else { return }
+        guard repositories[index].isHidden != isHidden else { return }
+        repositories[index].isHidden = isHidden
         updateSummaryRepository(repositories[index])
         save()
     }
+
+    func moveRepository(_ repositoryID: UUID, toGroup groupID: UUID) {
+        guard let index = repositories.firstIndex(where: { $0.id == repositoryID }) else { return }
+        guard groups.contains(where: { $0.id == groupID }) else { return }
+        guard repositories[index].groupID != groupID else { return }
+        repositories[index].groupID = groupID
+        updateSummaryRepository(repositories[index])
+        save()
+    }
+
+    // MARK: - Groups
+
+    @discardableResult
+    func addGroup(name: String = "", diffColors: DiffColors = .default) -> RepositoryGroup {
+        let group = RepositoryGroup(name: name, diffColors: diffColors)
+        groups.append(group)
+        save()
+        return group
+    }
+
+    func renameGroup(_ groupID: UUID, to newName: String) {
+        guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return }
+        guard groups[index].name != newName else { return }
+        groups[index].name = newName
+        save()
+    }
+
+    func updateGroupColors(_ groupID: UUID, diffColors: DiffColors) {
+        guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return }
+        guard groups[index].diffColors != diffColors else { return }
+        groups[index].diffColors = diffColors
+        save()
+    }
+
+    func updateGroupBadgeLabel(_ groupID: UUID, badgeLabel: BadgeLabel?) {
+        guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return }
+        guard groups[index].badgeLabel != badgeLabel else { return }
+        groups[index].badgeLabel = badgeLabel
+        save()
+    }
+
+    func reorderGroups(_ orderedIDs: [UUID]) {
+        let byID = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
+        var reordered: [RepositoryGroup] = []
+        reordered.reserveCapacity(groups.count)
+        for id in orderedIDs {
+            if let group = byID[id] {
+                reordered.append(group)
+            }
+        }
+        // Append any groups missing from the ordered list at the end (defensive).
+        for group in groups where !orderedIDs.contains(group.id) {
+            reordered.append(group)
+        }
+        guard reordered.count == groups.count else { return }
+        groups = reordered
+        save()
+    }
+
+    func removeGroup(_ groupID: UUID, mode: GroupRemovalMode) {
+        let members = repositories.filter { $0.groupID == groupID }
+
+        switch mode {
+        case .dissolveIntoStandalone:
+            for member in members {
+                let newGroup = RepositoryGroup(name: member.displayName)
+                groups.append(newGroup)
+                if let index = repositories.firstIndex(where: { $0.id == member.id }) {
+                    repositories[index].groupID = newGroup.id
+                    updateSummaryRepository(repositories[index])
+                }
+            }
+        case .deleteRepos:
+            for member in members {
+                repositories.removeAll { $0.id == member.id }
+                summaries.removeValue(forKey: member.id)
+                watchers[member.id]?.stop()
+                watchers.removeValue(forKey: member.id)
+            }
+        }
+        groups.removeAll { $0.id == groupID }
+        save()
+    }
+
+    // MARK: - Refresh plumbing
 
     func refreshAll() {
         repositories.forEach(refresh)

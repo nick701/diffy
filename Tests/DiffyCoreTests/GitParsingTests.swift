@@ -49,7 +49,7 @@ final class GitParsingTests: XCTestCase {
         ]
 
         let summary = RepoDiffBuilder.build(
-            repository: RepositoryConfig(displayName: "Diffy", path: "/tmp/diffy"),
+            repository: RepositoryConfig(displayName: "Diffy", path: "/tmp/diffy", groupID: UUID()),
             stagedStats: stagedStats,
             unstagedStats: unstagedStats,
             statuses: statuses,

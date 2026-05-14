@@ -5,20 +5,23 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
     public var displayName: String
     public var path: String
     public var editor: EditorPreference
-    public var diffColors: DiffColors
+    public var groupID: UUID
+    public var isHidden: Bool
 
     public init(
         id: UUID = UUID(),
         displayName: String,
         path: String,
         editor: EditorPreference = .systemDefault,
-        diffColors: DiffColors = .default
+        groupID: UUID,
+        isHidden: Bool = false
     ) {
         self.id = id
         self.displayName = displayName
         self.path = path
         self.editor = editor
-        self.diffColors = diffColors
+        self.groupID = groupID
+        self.isHidden = isHidden
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -26,7 +29,8 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         case displayName
         case path
         case editor
-        case diffColors
+        case groupID
+        case isHidden
     }
 
     public init(from decoder: Decoder) throws {
@@ -35,7 +39,8 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         displayName = try container.decode(String.self, forKey: .displayName)
         path = try container.decode(String.self, forKey: .path)
         editor = try container.decodeIfPresent(EditorPreference.self, forKey: .editor) ?? .systemDefault
-        diffColors = try container.decodeIfPresent(DiffColors.self, forKey: .diffColors) ?? .default
+        groupID = try container.decode(UUID.self, forKey: .groupID)
+        isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -44,7 +49,8 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         try container.encode(displayName, forKey: .displayName)
         try container.encode(path, forKey: .path)
         try container.encode(editor, forKey: .editor)
-        try container.encode(diffColors, forKey: .diffColors)
+        try container.encode(groupID, forKey: .groupID)
+        try container.encode(isHidden, forKey: .isHidden)
     }
 }
 
@@ -69,6 +75,65 @@ public struct DiffColors: Codable, Hashable, Sendable {
         self.additionHex = additionHex
         self.removalHex = removalHex
         self.badgeBackgroundHex = badgeBackgroundHex
+    }
+}
+
+public enum BadgeLabelPosition: String, Codable, Hashable, Sendable, CaseIterable {
+    case leading
+    case trailing
+    case above
+    case below
+}
+
+public struct BadgeLabel: Codable, Hashable, Sendable {
+    public var text: String
+    public var position: BadgeLabelPosition
+
+    public init(text: String, position: BadgeLabelPosition) {
+        self.text = text
+        self.position = position
+    }
+}
+
+public struct RepositoryGroup: Identifiable, Codable, Hashable, Sendable {
+    public var id: UUID
+    public var name: String
+    public var diffColors: DiffColors
+    public var badgeLabel: BadgeLabel?
+
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        diffColors: DiffColors = .default,
+        badgeLabel: BadgeLabel? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.diffColors = diffColors
+        self.badgeLabel = badgeLabel
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case diffColors
+        case badgeLabel
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        diffColors = try container.decodeIfPresent(DiffColors.self, forKey: .diffColors) ?? .default
+        badgeLabel = try container.decodeIfPresent(BadgeLabel.self, forKey: .badgeLabel)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(diffColors, forKey: .diffColors)
+        try container.encodeIfPresent(badgeLabel, forKey: .badgeLabel)
     }
 }
 

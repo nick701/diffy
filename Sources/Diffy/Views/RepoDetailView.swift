@@ -14,6 +14,11 @@ struct RepoDetailView: View {
         store.summaries[repositoryID]
     }
 
+    private var group: RepositoryGroup? {
+        guard let repository else { return nil }
+        return store.groups.first { $0.id == repository.groupID }
+    }
+
     var body: some View {
         if let repository, let summary {
             ScrollView {
@@ -27,12 +32,14 @@ struct RepoDetailView: View {
                     FileSectionView(
                         title: "Staged",
                         files: summary.stagedFiles,
-                        repository: repository
+                        repository: repository,
+                        diffColors: group?.diffColors ?? .default
                     )
                     FileSectionView(
                         title: "Unstaged",
                         files: summary.unstagedFiles,
-                        repository: repository
+                        repository: repository,
+                        diffColors: group?.diffColors ?? .default
                     )
 
                     if summary.stagedFiles.isEmpty && summary.unstagedFiles.isEmpty && summary.errorMessage == nil {
@@ -53,7 +60,8 @@ struct RepoDetailView: View {
     }
 
     private func header(repository: RepositoryConfig, summary: RepoDiffSummary) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        let colors = group?.diffColors ?? .default
+        return HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(repository.displayName)
                     .font(.title2.weight(.semibold))
@@ -68,11 +76,11 @@ struct RepoDetailView: View {
 
             HStack(spacing: 6) {
                 Text("+\(summary.addedLines)")
-                    .foregroundStyle(AppColor.swiftUIColor(hex: repository.diffColors.additionHex))
+                    .foregroundStyle(AppColor.swiftUIColor(hex: colors.additionHex))
                 Text("/")
                     .foregroundStyle(.secondary)
                 Text("-\(summary.removedLines)")
-                    .foregroundStyle(AppColor.swiftUIColor(hex: repository.diffColors.removalHex))
+                    .foregroundStyle(AppColor.swiftUIColor(hex: colors.removalHex))
             }
             .font(.system(.title3, design: .monospaced).weight(.medium))
 
@@ -115,26 +123,25 @@ struct RepoDetailView: View {
                 }
             }
 
-            HStack(spacing: 12) {
-                ColorPicker("Additions", selection: additionColor(for: repository))
-                    .labelsHidden()
-                    .help("Addition color")
-                ColorPicker("Removals", selection: removalColor(for: repository))
-                    .labelsHidden()
-                    .help("Removal color")
-                ColorPicker("Badge", selection: badgeBackgroundColor(for: repository))
-                    .labelsHidden()
-                    .help("Menu bar badge background")
-                Button("Clear Background") {
-                    var colors = repository.diffColors
-                    colors.badgeBackgroundHex = nil
-                    store.updateDiffColors(for: repository, diffColors: colors)
+            HStack {
+                Text("Group")
+                    .foregroundStyle(.secondary)
+                Picker("", selection: groupBinding(for: repository)) {
+                    ForEach(store.groups) { g in
+                        Text(g.name.isEmpty ? "Unnamed group" : g.name).tag(g.id)
+                    }
                 }
-                .disabled(repository.diffColors.badgeBackgroundHex == nil)
-                Button("Reset Colors") {
-                    store.updateDiffColors(for: repository, diffColors: .default)
+                .labelsHidden()
+                .frame(width: 220)
+
+                Button("New Group From Repo") {
+                    let g = store.addGroup(name: repository.displayName)
+                    store.moveRepository(repository.id, toGroup: g.id)
                 }
             }
+
+            Toggle("Hide from menu bar", isOn: hiddenBinding(for: repository))
+                .toggleStyle(.switch)
 
             Button(role: .destructive) {
                 store.removeRepository(repository)
@@ -167,36 +174,19 @@ struct RepoDetailView: View {
         }
     }
 
-    private func additionColor(for repository: RepositoryConfig) -> Binding<Color> {
+    private func groupBinding(for repository: RepositoryConfig) -> Binding<UUID> {
         Binding {
-            AppColor.swiftUIColor(hex: repository.diffColors.additionHex)
-        } set: { color in
-            var colors = repository.diffColors
-            colors.additionHex = AppColor.hex(color)
-            store.updateDiffColors(for: repository, diffColors: colors)
+            repository.groupID
+        } set: { newGroupID in
+            store.moveRepository(repository.id, toGroup: newGroupID)
         }
     }
 
-    private func removalColor(for repository: RepositoryConfig) -> Binding<Color> {
+    private func hiddenBinding(for repository: RepositoryConfig) -> Binding<Bool> {
         Binding {
-            AppColor.swiftUIColor(hex: repository.diffColors.removalHex)
-        } set: { color in
-            var colors = repository.diffColors
-            colors.removalHex = AppColor.hex(color)
-            store.updateDiffColors(for: repository, diffColors: colors)
-        }
-    }
-
-    private func badgeBackgroundColor(for repository: RepositoryConfig) -> Binding<Color> {
-        Binding {
-            if let hex = repository.diffColors.badgeBackgroundHex {
-                return AppColor.swiftUIColor(hex: hex)
-            }
-            return .clear
-        } set: { color in
-            var colors = repository.diffColors
-            colors.badgeBackgroundHex = AppColor.hex(color)
-            store.updateDiffColors(for: repository, diffColors: colors)
+            repository.isHidden
+        } set: { newValue in
+            store.setHidden(repository.id, isHidden: newValue)
         }
     }
 }
@@ -205,6 +195,7 @@ private struct FileSectionView: View {
     let title: String
     let files: [ChangedFileSummary]
     let repository: RepositoryConfig
+    let diffColors: DiffColors
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -225,7 +216,7 @@ private struct FileSectionView: View {
                         Button {
                             EditorLauncher.open(file: file, in: repository)
                         } label: {
-                            FileRowView(file: file, diffColors: repository.diffColors)
+                            FileRowView(file: file, diffColors: diffColors)
                         }
                         .buttonStyle(.plain)
                     }

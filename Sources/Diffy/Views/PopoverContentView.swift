@@ -3,6 +3,7 @@ import SwiftUI
 
 struct PopoverContentView: View {
     @ObservedObject var store: DiffyStore
+    let groupID: UUID
     let onOpenWindow: () -> Void
 
     var body: some View {
@@ -16,11 +17,32 @@ struct PopoverContentView: View {
         .frame(width: 420, height: 520)
     }
 
+    private var group: RepositoryGroup? {
+        store.groups.first { $0.id == groupID }
+    }
+
+    private var groupRepos: [RepositoryConfig] {
+        store.repositories.filter { $0.groupID == groupID && !$0.isHidden }
+    }
+
+    private var headerColors: DiffColors {
+        group?.diffColors ?? .default
+    }
+
+    private var headerTitle: String {
+        if let group, !group.name.isEmpty {
+            return group.name
+        }
+        return "Diffy"
+    }
+
     private var header: some View {
         let totals = aggregateTotals
         return HStack(alignment: .firstTextBaseline) {
-            Text("Diffy")
+            Text(headerTitle)
                 .font(.headline)
+                .lineLimit(1)
+                .truncationMode(.tail)
             Spacer()
             HStack(spacing: 4) {
                 Text("+\(totals.added)")
@@ -38,15 +60,25 @@ struct PopoverContentView: View {
 
     @ViewBuilder
     private var content: some View {
-        if store.repositories.isEmpty {
+        if group == nil {
             VStack(alignment: .leading, spacing: 10) {
-                Text("No Repositories")
+                Text("Group not found")
                     .font(.subheadline.weight(.semibold))
-                Text("Add a local git repository to start watching its diff stats.")
+                Text("This menu-bar item is no longer associated with a group.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Button("Add Repository") {
-                    RepositoryPicker.addRepository(to: store)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(14)
+        } else if groupRepos.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("No visible repositories")
+                    .font(.subheadline.weight(.semibold))
+                Text("Add a repository or unhide one of this group's repositories from the main window.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Button("See all groups") {
+                    onOpenWindow()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -54,8 +86,8 @@ struct PopoverContentView: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    ForEach(store.repositories) { repository in
-                        RepoBlock(store: store, repository: repository)
+                    ForEach(groupRepos) { repository in
+                        RepoBlock(store: store, repository: repository, groupColors: headerColors)
                     }
                 }
                 .padding(14)
@@ -75,7 +107,7 @@ struct PopoverContentView: View {
 
             Spacer()
 
-            Button("Open Diffy") {
+            Button("See all groups") {
                 onOpenWindow()
             }
             .keyboardShortcut(.return, modifiers: [])
@@ -87,7 +119,7 @@ struct PopoverContentView: View {
     private var aggregateTotals: (added: Int, removed: Int) {
         var added = 0
         var removed = 0
-        for repository in store.repositories {
+        for repository in groupRepos {
             if let summary = store.summaries[repository.id] {
                 added += summary.addedLines
                 removed += summary.removedLines
@@ -95,15 +127,12 @@ struct PopoverContentView: View {
         }
         return (added, removed)
     }
-
-    private var headerColors: DiffColors {
-        store.repositories.first?.diffColors ?? .default
-    }
 }
 
 private struct RepoBlock: View {
     @ObservedObject var store: DiffyStore
     let repository: RepositoryConfig
+    let groupColors: DiffColors
 
     private var summary: RepoDiffSummary? {
         store.summaries[repository.id]
@@ -119,9 +148,9 @@ private struct RepoBlock: View {
                 if let summary {
                     HStack(spacing: 2) {
                         Text("+\(summary.addedLines)")
-                            .foregroundStyle(AppColor.swiftUIColor(hex: repository.diffColors.additionHex))
+                            .foregroundStyle(AppColor.swiftUIColor(hex: groupColors.additionHex))
                         Text("-\(summary.removedLines)")
-                            .foregroundStyle(AppColor.swiftUIColor(hex: repository.diffColors.removalHex))
+                            .foregroundStyle(AppColor.swiftUIColor(hex: groupColors.removalHex))
                     }
                     .font(.system(.caption, design: .monospaced))
                 }
@@ -157,7 +186,7 @@ private struct RepoBlock: View {
                         Button {
                             EditorLauncher.open(file: file, in: repository)
                         } label: {
-                            CompactFileRow(file: file, diffColors: repository.diffColors)
+                            CompactFileRow(file: file, diffColors: groupColors)
                         }
                         .buttonStyle(.plain)
                     }
