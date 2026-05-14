@@ -30,11 +30,45 @@ public struct GitProcessRunner: GitProcessRunning, Sendable {
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
-        try process.run()
-        process.waitUntilExit()
+        let lock = NSLock()
+        var outputData = Data()
+        var errorData = Data()
+        let group = DispatchGroup()
 
-        let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let error = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        func attach(_ handle: FileHandle, into sink: @escaping (Data) -> Void) {
+            group.enter()
+            handle.readabilityHandler = { fh in
+                let chunk = fh.availableData
+                if chunk.isEmpty {
+                    fh.readabilityHandler = nil
+                    group.leave()
+                } else {
+                    sink(chunk)
+                }
+            }
+        }
+
+        attach(outputPipe.fileHandleForReading) { chunk in
+            lock.lock(); outputData.append(chunk); lock.unlock()
+        }
+        attach(errorPipe.fileHandleForReading) { chunk in
+            lock.lock(); errorData.append(chunk); lock.unlock()
+        }
+
+        do {
+            try process.run()
+        } catch {
+            outputPipe.fileHandleForReading.readabilityHandler = nil
+            errorPipe.fileHandleForReading.readabilityHandler = nil
+            group.leave(); group.leave()
+            throw error
+        }
+
+        process.waitUntilExit()
+        group.wait()
+
+        let output = String(data: outputData, encoding: .utf8) ?? ""
+        let error = String(data: errorData, encoding: .utf8) ?? ""
 
         guard process.terminationStatus == 0 else {
             throw GitClientError.commandFailed(error.trimmingCharacters(in: .whitespacesAndNewlines))
