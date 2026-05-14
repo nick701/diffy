@@ -1,18 +1,42 @@
 import Foundation
 
 public enum GitNumstatParser {
+    /// Parses `git diff --numstat -z` output. Records are NUL-terminated;
+    /// renames take the form `<added>\t<removed>\t\0<oldpath>\0<newpath>\0`,
+    /// normal records take `<added>\t<removed>\t<path>\0`.
     public static func parse(_ output: String) -> [String: FileLineStat] {
         var stats: [String: FileLineStat] = [:]
+        var index = output.startIndex
+        let end = output.endIndex
 
-        for line in output.split(whereSeparator: \.isNewline) {
-            let parts = line.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
-            guard parts.count == 3 else { continue }
+        while index < end {
+            guard let firstTab = output[index..<end].firstIndex(of: "\t") else { break }
+            let added = String(output[index..<firstTab])
+            index = output.index(after: firstTab)
 
-            let path = String(parts[2])
-            let isBinary = parts[0] == "-" || parts[1] == "-"
-            let added = Int(parts[0]) ?? 0
-            let removed = Int(parts[1]) ?? 0
-            stats[path] = FileLineStat(addedLines: added, removedLines: removed, isBinary: isBinary)
+            guard let secondTab = output[index..<end].firstIndex(of: "\t") else { break }
+            let removed = String(output[index..<secondTab])
+            index = output.index(after: secondTab)
+
+            guard index < end else { break }
+            let path: String
+            if output[index] == "\u{0}" {
+                index = output.index(after: index)
+                guard let oldEnd = output[index..<end].firstIndex(of: "\u{0}") else { break }
+                index = output.index(after: oldEnd)
+                guard let newEnd = output[index..<end].firstIndex(of: "\u{0}") else { break }
+                path = String(output[index..<newEnd])
+                index = output.index(after: newEnd)
+            } else {
+                guard let pathEnd = output[index..<end].firstIndex(of: "\u{0}") else { break }
+                path = String(output[index..<pathEnd])
+                index = output.index(after: pathEnd)
+            }
+
+            let isBinary = added == "-" || removed == "-"
+            let addedLines = Int(added) ?? 0
+            let removedLines = Int(removed) ?? 0
+            stats[path] = FileLineStat(addedLines: addedLines, removedLines: removedLines, isBinary: isBinary)
         }
 
         return stats
