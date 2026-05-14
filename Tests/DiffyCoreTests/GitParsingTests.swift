@@ -49,6 +49,15 @@ final class GitParsingTests: XCTestCase {
         XCTAssertEqual(statuses["Removed.swift"]?.unstagedStatus, .deleted)
     }
 
+    func testConflictedAndCopiedHaveDistinctDisplayGlyphs() {
+        XCTAssertEqual(GitChangeStatus.copied.displayStatus, "C")
+        XCTAssertEqual(GitChangeStatus.conflicted.displayStatus, "!")
+        XCTAssertNotEqual(
+            GitChangeStatus.conflicted.displayStatus,
+            GitChangeStatus.copied.displayStatus
+        )
+    }
+
     func testBuildsSummaryWithSeparateStagedAndUnstagedSections() {
         let stagedStats = [
             "Sources/App.swift": FileLineStat(addedLines: 4, removedLines: 1, isBinary: false)

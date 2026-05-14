@@ -250,7 +250,7 @@ public enum GitChangeStatus: Equatable, Sendable {
         case .renamed: "R"
         case .copied: "C"
         case .untracked: "U"
-        case .conflicted: "C"
+        case .conflicted: "!"
         }
     }
 }
