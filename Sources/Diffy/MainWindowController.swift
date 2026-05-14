@@ -52,14 +52,6 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         NSApp.setActivationPolicy(.accessory)
     }
 
-    func toggle() {
-        if window.isVisible {
-            hide()
-        } else {
-            show()
-        }
-    }
-
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         hide()
         return false

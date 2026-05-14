@@ -1,5 +1,4 @@
 import AppKit
-import DiffyCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {

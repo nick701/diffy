@@ -1,6 +1,5 @@
 import DiffyCore
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct MainView: View {
     @ObservedObject var store: DiffyStore
