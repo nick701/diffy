@@ -10,7 +10,7 @@ Diffy is local-only and read-only. It does not use GitHub, GitLab, Bitbucket, PR
 
 ## Status
 
-v0.3.1 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not notarized). Install instructions below handle Gatekeeper automatically.
+v0.3.2 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not notarized). Install instructions below handle Gatekeeper automatically.
 
 ## Features
 
