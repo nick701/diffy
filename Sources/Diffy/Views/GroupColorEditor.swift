@@ -59,11 +59,10 @@ struct GroupColorEditor: View {
             return .clear
         } set: { color in
             var colors = group.diffColors
-            let alpha = NSColor(color).usingColorSpace(.sRGB)?.alphaComponent ?? 1
-            if alpha < 0.01 {
-                colors[keyPath: keyPath] = nil
-            } else {
+            if let alpha = NSColor(color).usingColorSpace(.sRGB)?.alphaComponent, alpha >= 0.01 {
                 colors[keyPath: keyPath] = AppColor.hex(color)
+            } else {
+                colors[keyPath: keyPath] = nil
             }
             store.updateGroupColors(group.id, diffColors: colors)
         }

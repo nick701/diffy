@@ -7,39 +7,38 @@ public enum GitNumstatParser {
     public static func parse(_ output: String) -> [String: FileLineStat] {
         var stats: [String: FileLineStat] = [:]
         var index = output.startIndex
-        let end = output.endIndex
 
-        while index < end {
-            guard let firstTab = output[index..<end].firstIndex(of: "\t") else { break }
-            let added = String(output[index..<firstTab])
-            index = output.index(after: firstTab)
+        while index < output.endIndex {
+            guard let added = consume(output, from: &index, until: "\t"),
+                  let removed = consume(output, from: &index, until: "\t"),
+                  index < output.endIndex else { break }
 
-            guard let secondTab = output[index..<end].firstIndex(of: "\t") else { break }
-            let removed = String(output[index..<secondTab])
-            index = output.index(after: secondTab)
-
-            guard index < end else { break }
-            let path: String
+            let path: Substring?
             if output[index] == "\u{0}" {
                 index = output.index(after: index)
-                guard let oldEnd = output[index..<end].firstIndex(of: "\u{0}") else { break }
-                index = output.index(after: oldEnd)
-                guard let newEnd = output[index..<end].firstIndex(of: "\u{0}") else { break }
-                path = String(output[index..<newEnd])
-                index = output.index(after: newEnd)
+                _ = consume(output, from: &index, until: "\u{0}")  // discard old path
+                path = consume(output, from: &index, until: "\u{0}")
             } else {
-                guard let pathEnd = output[index..<end].firstIndex(of: "\u{0}") else { break }
-                path = String(output[index..<pathEnd])
-                index = output.index(after: pathEnd)
+                path = consume(output, from: &index, until: "\u{0}")
             }
+            guard let path else { break }
 
             let isBinary = added == "-" || removed == "-"
-            let addedLines = Int(added) ?? 0
-            let removedLines = Int(removed) ?? 0
-            stats[path] = FileLineStat(addedLines: addedLines, removedLines: removedLines, isBinary: isBinary)
+            stats[String(path)] = FileLineStat(
+                addedLines: Int(added) ?? 0,
+                removedLines: Int(removed) ?? 0,
+                isBinary: isBinary
+            )
         }
 
         return stats
+    }
+
+    private static func consume(_ output: String, from index: inout String.Index, until terminator: Character) -> Substring? {
+        guard let end = output[index...].firstIndex(of: terminator) else { return nil }
+        let value = output[index..<end]
+        index = output.index(after: end)
+        return value
     }
 }
 
