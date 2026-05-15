@@ -2,6 +2,49 @@ import XCTest
 @testable import DiffyCore
 
 final class GitClientIntegrationTests: XCTestCase {
+    func testDiscoversWorktreesIncludingBranchAndDetachedStates() throws {
+        let repo = try TemporaryGitRepository()
+        try repo.write("tracked.txt", contents: "one\n")
+        try repo.git("add", "tracked.txt")
+        try repo.git("commit", "-m", "initial")
+
+        let featureWT = repo.url.deletingLastPathComponent().appendingPathComponent("wt-feature-" + UUID().uuidString)
+        let detachedWT = repo.url.deletingLastPathComponent().appendingPathComponent("wt-detached-" + UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: featureWT)
+            try? FileManager.default.removeItem(at: detachedWT)
+        }
+
+        try repo.git("worktree", "add", featureWT.path, "-b", "feature")
+        try repo.git("worktree", "add", "--detach", detachedWT.path, "HEAD")
+
+        let entries = try GitClient().discoverWorktrees(parentPath: repo.path)
+        XCTAssertEqual(entries.count, 3)
+
+        let canonicalMain = DiffyCore.canonicalPath(repo.path)
+        let canonicalFeature = DiffyCore.canonicalPath(featureWT.path)
+        let canonicalDetached = DiffyCore.canonicalPath(detachedWT.path)
+
+        let mainEntry = try XCTUnwrap(entries.first { DiffyCore.canonicalPath($0.path) == canonicalMain })
+        switch mainEntry.branch {
+        case .branch(let name):
+            XCTAssertTrue(name == "main" || name == "master", "Unexpected default branch: \(name)")
+        default:
+            XCTFail("Main worktree should be on a branch, got \(mainEntry.branch)")
+        }
+
+        let featureEntry = try XCTUnwrap(entries.first { DiffyCore.canonicalPath($0.path) == canonicalFeature })
+        XCTAssertEqual(featureEntry.branch, .branch("feature"))
+
+        let detachedEntry = try XCTUnwrap(entries.first { DiffyCore.canonicalPath($0.path) == canonicalDetached })
+        if case .detached(let sha) = detachedEntry.branch {
+            XCTAssertEqual(sha.count, 7, "Short SHA should be 7 chars")
+        } else {
+            XCTFail("Detached worktree should report detached, got \(detachedEntry.branch)")
+        }
+    }
+
+
     func testSummarizesTemporaryRepositoryAndReturnsToZeroAfterCommit() throws {
         let repo = try TemporaryGitRepository()
         try repo.write("tracked.txt", contents: "one\n")

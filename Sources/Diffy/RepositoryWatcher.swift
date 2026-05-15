@@ -7,9 +7,9 @@ final class RepositoryWatcher {
     private var stream: FSEventStreamRef?
     private var debounceWorkItem: DispatchWorkItem?
 
-    init(repositoryPath: String, onChange: @escaping () -> Void) {
-        let gitPath = URL(fileURLWithPath: repositoryPath).appendingPathComponent(".git").path
-        self.paths = [repositoryPath, gitPath]
+    init(repositoryPath: String, gitdirPath: String? = nil, onChange: @escaping () -> Void) {
+        let resolvedGitdir = gitdirPath ?? URL(fileURLWithPath: repositoryPath).appendingPathComponent(".git").path
+        self.paths = [repositoryPath, resolvedGitdir]
         self.onChange = onChange
     }
 

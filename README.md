@@ -6,7 +6,7 @@
 
 Diffy is a small native macOS menu bar app for solo developers. It watches local git repositories and shows live working-tree diff stats directly in the menu bar.
 
-Diffy is local-only and read-only. It does not use GitHub, GitLab, Bitbucket, PRs, issues, cloud services, or accounts. Its git commands are observational only.
+Diffy is local-only. It does not use GitHub, GitLab, Bitbucket, PRs, issues, cloud services, or accounts. Its git commands are read-only with one explicit, user-initiated exception: removing a linked worktree from the in-app confirmation dialog.
 
 ## Status
 
@@ -20,6 +20,8 @@ v0.3.2 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs 
 - Main window: sidebar with one section per group (drag-drop repos between sections, reorder groups, edit colors / labels / names / hidden state), detail pane with per-repo settings.
 - Window close hides Diffy back to the menu bar (no quit); ⌘Q or right-click → Quit to actually exit.
 - Per-repo detail pane: staged and unstaged changed-file sections with status labels (`M`, `A`, `D`, `U`, `C`, `!`) and per-file `+a / -b`.
+- **Branch labels** on every row (popover, sidebar, detail pane). Detached HEAD shows the short SHA in italics.
+- **Linked worktrees** discovered automatically from `git worktree list --porcelain` and shown as indented sub-rows under their parent repo, each with their own diff stats and branch. Per-worktree "Exclude from group totals" toggle works the same way as for any other repo. Remove a finished worktree from inside Diffy via a confirmation dialog in the detail pane — Diffy never uses `--force`, so any uncommitted changes or untracked files in the worktree must be handled in your terminal first.
 - Open changed files in a configured editor (Xcode, Cursor, VS Code, Zed, or a custom shell command).
 - **Launch at Login** toggle (requires Diffy installed to `/Applications`).
 - Filesystem-triggered refresh with polling fallback.
@@ -69,4 +71,4 @@ Diffy includes Sparkle integration, but update checks are enabled only in releas
 
 ## Read-Only Guarantee
 
-Diffy never stages, commits, checks out, cleans, resets, rebases, merges, or writes to watched repositories. It uses read-only git inspection commands with optional locks disabled.
+Diffy is read-only with one explicit, user-initiated exception: removing a linked worktree via the in-app confirmation dialog (which runs `git worktree remove <path>` without `--force`). All other git operations Diffy performs (`diff`, `status`, `worktree list`) are strictly observational, run with `GIT_OPTIONAL_LOCKS=0` and `--no-optional-locks`. Diffy never stages, commits, checks out, cleans, resets, rebases, merges, or otherwise mutates a repository's working tree.

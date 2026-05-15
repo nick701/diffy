@@ -16,6 +16,7 @@ public enum GitReadCommandKind: CaseIterable, Sendable {
     case stagedNumstat
     case unstagedNumstat
     case porcelainStatus
+    case worktreeListPorcelain
 }
 
 public enum GitCommandFactory {
@@ -34,6 +35,8 @@ public enum GitCommandFactory {
             suffix = ["diff", "--numstat", "-z"]
         case .porcelainStatus:
             suffix = ["status", "--porcelain=v1", "-z", "--untracked-files=all"]
+        case .worktreeListPorcelain:
+            suffix = ["worktree", "list", "--porcelain"]
         }
 
         return GitCommand(arguments: base + suffix, environment: ["GIT_OPTIONAL_LOCKS": "0"])

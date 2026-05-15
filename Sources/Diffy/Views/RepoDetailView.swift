@@ -5,6 +5,7 @@ struct RepoDetailView: View {
     @ObservedObject var store: DiffyStore
     let repositoryID: UUID
     @State private var customCommand: String = ""
+    @State private var pendingWorktreeRemoval: UUID?
 
     private var repository: RepositoryConfig? {
         store.repositories.first { $0.id == repositoryID }
@@ -17,6 +18,11 @@ struct RepoDetailView: View {
     private var group: RepositoryGroup? {
         guard let repository else { return nil }
         return store.groups.first { $0.id == repository.groupID }
+    }
+
+    private var parentRepository: RepositoryConfig? {
+        guard let repository, let pid = repository.parentRepositoryID else { return nil }
+        return store.repositories.first { $0.id == pid }
     }
 
     var body: some View {
@@ -54,8 +60,53 @@ struct RepoDetailView: View {
                 }
                 .padding(20)
             }
+            .confirmationDialog(
+                worktreeRemovalTitle,
+                isPresented: worktreeRemovalDialogPresented,
+                titleVisibility: .visible
+            ) {
+                Button("Remove", role: .destructive) {
+                    if let id = pendingWorktreeRemoval {
+                        store.clearWorktreeRemovalError()
+                        store.removeWorktree(repositoryID: id)
+                    }
+                    pendingWorktreeRemoval = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingWorktreeRemoval = nil
+                }
+            } message: {
+                Text(worktreeRemovalMessage)
+            }
+            .onAppear {
+                store.clearWorktreeRemovalError()
+            }
         } else {
             ContentUnavailableView("Repository unavailable", systemImage: "questionmark.folder")
+        }
+    }
+
+    private var worktreeRemovalTitle: String { "Remove worktree?" }
+
+    private var worktreeRemovalMessage: String {
+        guard let id = pendingWorktreeRemoval,
+              let child = store.repositories.first(where: { $0.id == id })
+        else { return "" }
+        let parentName = parentRepository?.displayName ?? "its repository"
+        let branchName: String
+        switch store.summaries[id]?.branch {
+        case .some(.branch(let name)): branchName = "branch `\(name)`"
+        case .some(.detached(let sha)): branchName = "detached HEAD at `\(sha)`"
+        default: branchName = "its checked-out commit"
+        }
+        return "This will delete the directory at \(child.path) and remove it from \(parentName). \(branchName) itself is preserved and can be checked out elsewhere."
+    }
+
+    private var worktreeRemovalDialogPresented: Binding<Bool> {
+        Binding {
+            pendingWorktreeRemoval != nil
+        } set: { newValue in
+            if !newValue { pendingWorktreeRemoval = nil }
         }
     }
 
@@ -65,6 +116,7 @@ struct RepoDetailView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(repository.displayName)
                     .font(.title2.weight(.semibold))
+                BranchSubtitle(branch: summary.branch)
                 Text(repository.path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -123,35 +175,69 @@ struct RepoDetailView: View {
                 }
             }
 
-            HStack {
-                Text("Group")
-                    .foregroundStyle(.secondary)
-                Picker("", selection: groupBinding(for: repository)) {
-                    ForEach(store.groups) { g in
-                        Text(g.name.isEmpty ? "Unnamed group" : g.name).tag(g.id)
+            if !repository.isAutoManaged {
+                HStack {
+                    Text("Group")
+                        .foregroundStyle(.secondary)
+                    Picker("", selection: groupBinding(for: repository)) {
+                        ForEach(store.groups) { g in
+                            Text(g.name.isEmpty ? "Unnamed group" : g.name).tag(g.id)
+                        }
                     }
-                }
-                .labelsHidden()
-                .frame(width: 220)
+                    .labelsHidden()
+                    .frame(width: 220)
 
-                Button("New Group From Repo") {
-                    let g = store.addGroup(name: repository.displayName)
-                    store.moveRepository(repository.id, toGroup: g.id)
+                    Button("New Group From Repo") {
+                        let g = store.addGroup(name: repository.displayName)
+                        store.moveRepository(repository.id, toGroup: g.id)
+                    }
                 }
             }
 
             Toggle("Exclude from group totals", isOn: hiddenBinding(for: repository))
                 .toggleStyle(.switch)
 
-            Button(role: .destructive) {
-                store.removeRepository(repository)
-            } label: {
-                Label("Remove Repository", systemImage: "trash")
+            if repository.isAutoManaged {
+                worktreeRemovalControls(for: repository)
+            } else {
+                Button(role: .destructive) {
+                    store.removeRepository(repository)
+                } label: {
+                    Label("Remove Repository", systemImage: "trash")
+                }
             }
         }
         .onAppear {
             if case .command(let command) = repository.editor {
                 customCommand = command
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func worktreeRemovalControls(for repository: RepositoryConfig) -> some View {
+        let isMain = store.isGitMainWorktree(repositoryID: repository.id)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Button(role: .destructive) {
+                    pendingWorktreeRemoval = repository.id
+                } label: {
+                    Label("Remove worktree…", systemImage: "trash")
+                }
+                .disabled(isMain)
+                .help(isMain ? "Diffy can't remove this repo's main worktree." : "Remove this worktree from disk")
+
+                Button {
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: repository.path)])
+                } label: {
+                    Label("Reveal in Finder", systemImage: "folder")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+            }
+
+            if let removalError = store.lastWorktreeRemovalError {
+                ErrorBanner(message: removalError)
             }
         }
     }

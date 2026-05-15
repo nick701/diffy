@@ -7,7 +7,8 @@ public enum RepoDiffBuilder {
         unstagedStats: [String: FileLineStat],
         statuses: [String: GitPathStatus],
         untrackedStats: [String: FileLineStat],
-        refreshedAt: Date = Date()
+        refreshedAt: Date = Date(),
+        branch: BranchInfo? = nil
     ) -> RepoDiffSummary {
         let stagedFiles = stagedStats.keys.sorted().map { path in
             makeFile(
@@ -36,7 +37,8 @@ public enum RepoDiffBuilder {
             removedLines: removed,
             stagedFiles: stagedFiles,
             unstagedFiles: unstagedFiles,
-            refreshedAt: refreshedAt
+            refreshedAt: refreshedAt,
+            branch: branch
         )
     }
 

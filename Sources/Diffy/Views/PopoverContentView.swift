@@ -25,6 +25,10 @@ struct PopoverContentView: View {
         store.repositories.filter { $0.groupID == groupID && !$0.isHidden }
     }
 
+    private var orderedGroupRepos: [RepositoryConfig] {
+        store.orderedRepositories(in: groupID, includeHidden: false)
+    }
+
     private var headerColors: DiffColors {
         group?.diffColors ?? .default
     }
@@ -86,8 +90,9 @@ struct PopoverContentView: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    ForEach(groupRepos) { repository in
+                    ForEach(orderedGroupRepos) { repository in
                         RepoBlock(store: store, repository: repository, groupColors: headerColors)
+                            .padding(.leading, repository.parentRepositoryID == nil ? 0 : 16)
                     }
                 }
                 .padding(14)
@@ -141,9 +146,12 @@ private struct RepoBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text(repository.displayName)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(repository.displayName)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    BranchSubtitle(branch: summary?.branch)
+                }
                 Spacer(minLength: 8)
                 if let summary {
                     HStack(spacing: 2) {

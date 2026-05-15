@@ -107,7 +107,7 @@ public struct GitClient: @unchecked Sendable {
         self.maxUntrackedBytes = maxUntrackedBytes
     }
 
-    public func summarize(_ repository: RepositoryConfig) throws -> RepoDiffSummary {
+    public func summarize(_ repository: RepositoryConfig, branch: BranchInfo? = nil) throws -> RepoDiffSummary {
         guard fileManager.fileExists(atPath: repository.path) else {
             throw GitClientError.invalidRepository(repository.path)
         }
@@ -128,8 +128,18 @@ public struct GitClient: @unchecked Sendable {
             stagedStats: GitNumstatParser.parse(staged),
             unstagedStats: GitNumstatParser.parse(unstaged),
             statuses: statuses,
-            untrackedStats: untrackedStats
+            untrackedStats: untrackedStats,
+            branch: branch
         )
+    }
+
+    /// Run `git worktree list --porcelain` from `parentPath` and parse the output.
+    public func discoverWorktrees(parentPath: String) throws -> [WorktreeEntry] {
+        guard fileManager.fileExists(atPath: parentPath) else {
+            throw GitClientError.invalidRepository(parentPath)
+        }
+        let output = try runner.run(GitCommandFactory.command(for: .worktreeListPorcelain, repositoryPath: parentPath))
+        return GitWorktreeParser.parse(output)
     }
 
     private func statForUntrackedFile(repositoryPath: String, relativePath: String) -> FileLineStat {

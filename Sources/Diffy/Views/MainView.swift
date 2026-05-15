@@ -63,12 +63,20 @@ struct MainView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 Button {
+                    store.clearAddError()
                     RepositoryPicker.addRepository(to: store)
                 } label: {
                     Label("Add Repository", systemImage: "plus")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.borderless)
+
+                if let addError = store.lastAddError {
+                    Text(addError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .lineLimit(2)
+                }
 
                 Toggle(isOn: launchAtLoginBinding) {
                     Text("Launch at Login")
@@ -195,12 +203,8 @@ private struct GroupSectionView: View {
         store.repositories.filter { $0.groupID == group.id }
     }
 
-    private var visibleRepos: [RepositoryConfig] {
-        groupRepos.filter { !$0.isHidden }
-    }
-
-    private var hiddenRepos: [RepositoryConfig] {
-        groupRepos.filter { $0.isHidden }
+    private var orderedRows: [RepositoryConfig] {
+        store.orderedRepositories(in: group.id, includeHidden: true)
     }
 
     var body: some View {
@@ -208,7 +212,7 @@ private struct GroupSectionView: View {
             header
 
             VStack(spacing: 1) {
-                ForEach(visibleRepos) { repository in
+                ForEach(orderedRows) { repository in
                     RepoSidebarRow(
                         store: store,
                         repository: repository,
@@ -216,16 +220,7 @@ private struct GroupSectionView: View {
                         isSelected: selectedRepoID == repository.id,
                         onSelect: { selectedRepoID = repository.id }
                     )
-                }
-                ForEach(hiddenRepos) { repository in
-                    RepoSidebarRow(
-                        store: store,
-                        repository: repository,
-                        groupColors: group.diffColors,
-                        isSelected: selectedRepoID == repository.id,
-                        onSelect: { selectedRepoID = repository.id }
-                    )
-                    .opacity(0.45)
+                    .opacity(repository.isHidden ? 0.45 : 1)
                 }
                 if groupRepos.isEmpty {
                     Text("Empty group — drop a repository here.")
@@ -247,6 +242,9 @@ private struct GroupSectionView: View {
             )
             .dropDestination(for: String.self) { items, _ in
                 guard let raw = items.first, let repoID = UUID(uuidString: raw) else { return false }
+                guard let dropped = store.repositories.first(where: { $0.id == repoID }),
+                      dropped.parentRepositoryID == nil
+                else { return false }
                 store.moveRepository(repoID, toGroup: group.id)
                 return true
             } isTargeted: { targeted in
@@ -373,7 +371,16 @@ private struct RepoSidebarRow: View {
         store.summaries[repository.id]
     }
 
+    private var isChild: Bool {
+        repository.parentRepositoryID != nil
+    }
+
     var body: some View {
+        rowContent
+            .applyDraggable(enabled: !isChild, id: repository.id, displayName: repository.displayName)
+    }
+
+    private var rowContent: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Button {
                 store.setHidden(repository.id, isHidden: !repository.isHidden)
@@ -387,6 +394,7 @@ private struct RepoSidebarRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(repository.displayName)
                         .lineLimit(1)
+                    BranchSubtitle(branch: summary?.branch)
                     Text(repository.path)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -410,16 +418,26 @@ private struct RepoSidebarRow: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+        .padding(.leading, isChild ? 16 : 0)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
         )
-        .draggable(repository.id.uuidString) {
-            // Drag preview.
-            Text(repository.displayName)
-                .padding(6)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func applyDraggable(enabled: Bool, id: UUID, displayName: String) -> some View {
+        if enabled {
+            self.draggable(id.uuidString) {
+                Text(displayName)
+                    .padding(6)
+                    .background(.regularMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        } else {
+            self
         }
     }
 }
@@ -455,6 +473,9 @@ private struct NewGroupDropTarget: View {
         .padding(.horizontal, 10)
         .dropDestination(for: String.self) { items, _ in
             guard let raw = items.first, let repoID = UUID(uuidString: raw) else { return false }
+            guard let dropped = store.repositories.first(where: { $0.id == repoID }),
+                  dropped.parentRepositoryID == nil
+            else { return false }
             let newGroup = store.addGroup()
             store.moveRepository(repoID, toGroup: newGroup.id)
             return true

@@ -7,6 +7,10 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
     public var editor: EditorPreference
     public var groupID: UUID
     public var isHidden: Bool
+    /// Set on auto-discovered linked-worktree rows; nil for user-added repos.
+    public var parentRepositoryID: UUID?
+    /// True for rows that Diffy manages itself (auto-discovered worktrees).
+    public var isAutoManaged: Bool
 
     public init(
         id: UUID = UUID(),
@@ -14,7 +18,9 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         path: String,
         editor: EditorPreference = .systemDefault,
         groupID: UUID,
-        isHidden: Bool = false
+        isHidden: Bool = false,
+        parentRepositoryID: UUID? = nil,
+        isAutoManaged: Bool = false
     ) {
         self.id = id
         self.displayName = displayName
@@ -22,6 +28,8 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         self.editor = editor
         self.groupID = groupID
         self.isHidden = isHidden
+        self.parentRepositoryID = parentRepositoryID
+        self.isAutoManaged = isAutoManaged
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -31,6 +39,8 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         case editor
         case groupID
         case isHidden
+        case parentRepositoryID
+        case isAutoManaged
     }
 
     public init(from decoder: Decoder) throws {
@@ -41,6 +51,8 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         editor = try container.decodeIfPresent(EditorPreference.self, forKey: .editor) ?? .systemDefault
         groupID = try container.decode(UUID.self, forKey: .groupID)
         isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
+        parentRepositoryID = try container.decodeIfPresent(UUID.self, forKey: .parentRepositoryID)
+        isAutoManaged = try container.decodeIfPresent(Bool.self, forKey: .isAutoManaged) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -51,6 +63,8 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         try container.encode(editor, forKey: .editor)
         try container.encode(groupID, forKey: .groupID)
         try container.encode(isHidden, forKey: .isHidden)
+        try container.encodeIfPresent(parentRepositoryID, forKey: .parentRepositoryID)
+        try container.encode(isAutoManaged, forKey: .isAutoManaged)
     }
 }
 
@@ -143,6 +157,14 @@ public struct RepositoryGroup: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+/// Branch state of a working tree. Populated from `git worktree list --porcelain`.
+public enum BranchInfo: Equatable, Sendable {
+    case branch(String)
+    case detached(shortSHA: String)
+    case bare
+    case unknown
+}
+
 public struct RepoDiffSummary: Equatable, Sendable {
     public var repository: RepositoryConfig
     public var addedLines: Int
@@ -151,6 +173,7 @@ public struct RepoDiffSummary: Equatable, Sendable {
     public var unstagedFiles: [ChangedFileSummary]
     public var refreshedAt: Date
     public var errorMessage: String?
+    public var branch: BranchInfo?
 
     public init(
         repository: RepositoryConfig,
@@ -159,7 +182,8 @@ public struct RepoDiffSummary: Equatable, Sendable {
         stagedFiles: [ChangedFileSummary] = [],
         unstagedFiles: [ChangedFileSummary] = [],
         refreshedAt: Date = Date(),
-        errorMessage: String? = nil
+        errorMessage: String? = nil,
+        branch: BranchInfo? = nil
     ) {
         self.repository = repository
         self.addedLines = addedLines
@@ -168,10 +192,24 @@ public struct RepoDiffSummary: Equatable, Sendable {
         self.unstagedFiles = unstagedFiles
         self.refreshedAt = refreshedAt
         self.errorMessage = errorMessage
+        self.branch = branch
     }
 
     public static func empty(for repository: RepositoryConfig) -> RepoDiffSummary {
         RepoDiffSummary(repository: repository)
+    }
+
+    /// Equality intentionally ignores `refreshedAt` so that two summaries with identical
+    /// content compare equal — lets `DiffyStore` skip redundant `@Published` writes when
+    /// nothing material changed between refreshes.
+    public static func == (lhs: RepoDiffSummary, rhs: RepoDiffSummary) -> Bool {
+        lhs.repository == rhs.repository
+            && lhs.addedLines == rhs.addedLines
+            && lhs.removedLines == rhs.removedLines
+            && lhs.stagedFiles == rhs.stagedFiles
+            && lhs.unstagedFiles == rhs.unstagedFiles
+            && lhs.errorMessage == rhs.errorMessage
+            && lhs.branch == rhs.branch
     }
 }
 
