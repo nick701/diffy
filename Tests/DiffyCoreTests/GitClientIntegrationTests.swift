@@ -44,6 +44,26 @@ final class GitClientIntegrationTests: XCTestCase {
         }
     }
 
+    func testDiscoveringFromLinkedWorktreeReturnsSameFamilyWithMainFirst() throws {
+        let repo = try TemporaryGitRepository()
+        try repo.write("tracked.txt", contents: "one\n")
+        try repo.git("add", "tracked.txt")
+        try repo.git("commit", "-m", "initial")
+
+        let featureWT = repo.url.deletingLastPathComponent().appendingPathComponent("wt-feature-" + UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: featureWT)
+        }
+
+        try repo.git("worktree", "add", featureWT.path, "-b", "feature")
+
+        let fromMain = try GitClient().discoverWorktrees(parentPath: repo.path)
+        let fromLinked = try GitClient().discoverWorktrees(parentPath: featureWT.path)
+
+        XCTAssertEqual(fromLinked.map { DiffyCore.canonicalPath($0.path) }, fromMain.map { DiffyCore.canonicalPath($0.path) })
+        XCTAssertEqual(DiffyCore.canonicalPath(fromLinked[0].path), DiffyCore.canonicalPath(repo.path))
+    }
+
 
     func testSummarizesTemporaryRepositoryAndReturnsToZeroAfterCommit() throws {
         let repo = try TemporaryGitRepository()

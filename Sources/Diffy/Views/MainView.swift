@@ -388,7 +388,7 @@ private struct RepoSidebarRow: View {
                 Image(systemName: repository.isHidden ? "eye.slash" : "eye")
             }
             .buttonStyle(.borderless)
-            .help(repository.isHidden ? "Show in menu bar" : "Hide from menu bar")
+            .help(repository.isHidden ? "Include in group totals" : "Exclude from group totals")
 
             Button(action: onSelect) {
                 VStack(alignment: .leading, spacing: 2) {

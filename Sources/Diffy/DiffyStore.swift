@@ -33,6 +33,9 @@ final class DiffyStore: ObservableObject {
         guard let state = try? StoredStateMigration.decode(data) else { return }
         groups = state.groups
         repositories = state.repositories
+        if normalizeRepositoryRows() {
+            save()
+        }
     }
 
     func save() {
@@ -47,7 +50,9 @@ final class DiffyStore: ObservableObject {
     }
 
     func start() {
-        sweepOrphanedAutoManagedRows()
+        if normalizeRepositoryRows() {
+            save()
+        }
         rebuildWatchers()
         refreshAll()
         pollingTask = Task { [weak self] in
@@ -58,21 +63,31 @@ final class DiffyStore: ObservableObject {
         }
     }
 
-    /// Defensive cleanup for auto-managed rows whose parent isn't in `repositories`
-    /// (hand-edited JSON, or a future bug in the cascade).
-    private func sweepOrphanedAutoManagedRows() {
-        let parentIDs = Set(repositories.filter { !$0.isAutoManaged }.map(\.id))
-        let orphanIDs = repositories
-            .filter { repo in
-                guard repo.isAutoManaged, let pid = repo.parentRepositoryID else { return false }
-                return !parentIDs.contains(pid)
+    /// Defensive cleanup for auto-managed rows whose parent relationship or path identity
+    /// is already invalid in persisted state.
+    private func normalizeRepositoryRows() -> Bool {
+        let byID = Dictionary(uniqueKeysWithValues: repositories.map { ($0.id, $0) })
+        var idsToRemove = Set<UUID>()
+
+        for repo in repositories where repo.isAutoManaged {
+            guard let parentID = repo.parentRepositoryID,
+                  let parent = byID[parentID],
+                  !parent.isAutoManaged
+            else {
+                idsToRemove.insert(repo.id)
+                continue
             }
-            .map(\.id)
-        guard !orphanIDs.isEmpty else { return }
-        for id in orphanIDs {
-            tearDownRow(id: id)
         }
-        save()
+
+        let duplicateCandidates = repositories.filter { !idsToRemove.contains($0.id) }
+        idsToRemove.formUnion(WorktreeInventoryPolicy.duplicateRepositoryIDsToRemove(repositories: duplicateCandidates))
+
+        guard !idsToRemove.isEmpty else { return false }
+        for id in idsToRemove {
+            tearDownRow(id: id)
+            lastWorktreeEntries.removeValue(forKey: id)
+        }
+        return true
     }
 
     func stop() {
@@ -89,9 +104,8 @@ final class DiffyStore: ObservableObject {
         let canonical = canonicalPath(url.path)
 
         if let existing = repositories.first(where: { canonicalPath($0.path) == canonical }) {
-            if let parentID = existing.parentRepositoryID,
-               let parent = repositories.first(where: { $0.id == parentID }) {
-                lastAddError = "This path is already tracked as a worktree of \"\(parent.displayName)\"."
+            if existing.isAutoManaged {
+                promoteAutoManagedRepository(existing, toPath: url.path, displayName: url.lastPathComponent)
             } else {
                 lastAddError = "This path is already tracked."
             }
@@ -110,6 +124,25 @@ final class DiffyStore: ObservableObject {
         lastAddError = nil
         save()
         seedRow(config)
+    }
+
+    private func promoteAutoManagedRepository(_ repository: RepositoryConfig, toPath path: String, displayName: String) {
+        guard let index = repositories.firstIndex(where: { $0.id == repository.id }) else { return }
+        let oldParentID = repositories[index].parentRepositoryID
+
+        repositories[index].displayName = displayName
+        repositories[index].path = path
+        repositories[index].parentRepositoryID = nil
+        repositories[index].isAutoManaged = false
+        updateSummaryRepository(repositories[index])
+
+        restartWatcher(for: repositories[index])
+        lastAddError = nil
+        save()
+        refresh(repositoryID: repository.id)
+        if let oldParentID {
+            refresh(repositoryID: oldParentID)
+        }
     }
 
     func clearAddError() {
@@ -393,28 +426,31 @@ final class DiffyStore: ObservableObject {
         }
     }
 
-    /// Add/remove auto-managed child rows so they mirror porcelain output. Skips prunable + bare
-    /// entries, and skips the parent's own row.
+    /// Add/remove auto-managed child rows so they mirror the family-owner policy.
     private func reconcileChildren(parentID: UUID, entries: [WorktreeEntry]) {
         guard let parent = repositories.first(where: { $0.id == parentID }) else { return }
-        let canonicalParent = canonicalPath(parent.path)
 
-        let expected: [(canonical: String, entry: WorktreeEntry)] = entries.compactMap { entry in
-            if entry.isPrunable { return nil }
-            if case .bare = entry.branch { return nil }
-            let canonical = canonicalPath(entry.path)
-            if canonical == canonicalParent { return nil }
-            return (canonical, entry)
-        }
-        let expectedCanonicalSet = Set(expected.map(\.canonical))
+        let expected = WorktreeInventoryPolicy.desiredAutoManagedChildren(
+            parent: parent,
+            repositories: repositories,
+            entries: entries
+        )
+        let expectedCanonicalSet = Set(expected.map(\.canonicalPath))
 
         let currentChildren = repositories.filter { $0.parentRepositoryID == parentID }
-        let currentByCanonical = Dictionary(
-            uniqueKeysWithValues: currentChildren.map { (canonicalPath($0.path), $0) }
-        )
+        let duplicateChildIDs = Set(WorktreeInventoryPolicy.duplicateRepositoryIDsToRemove(repositories: currentChildren))
+        var currentByCanonical: [String: RepositoryConfig] = [:]
+        for child in currentChildren where !duplicateChildIDs.contains(child.id) {
+            currentByCanonical[canonicalPath(child.path)] = child
+        }
         let currentCanonicalSet = Set(currentByCanonical.keys)
 
         var mutated = false
+
+        for id in duplicateChildIDs {
+            tearDownRow(id: id)
+            mutated = true
+        }
 
         let gone = currentCanonicalSet.subtracting(expectedCanonicalSet)
         if !gone.isEmpty {
@@ -425,15 +461,49 @@ final class DiffyStore: ObservableObject {
             mutated = true
         }
 
-        let toAdd = expected.filter { !currentCanonicalSet.contains($0.canonical) }
-        for (_, entry) in toAdd {
-            let displayName: String
-            switch entry.branch {
-            case .branch(let name): displayName = name
-            default: displayName = URL(fileURLWithPath: entry.path).lastPathComponent
+        for candidate in expected {
+            let canonical = candidate.canonicalPath
+            let entry = candidate.entry
+
+            if let child = currentByCanonical[canonical],
+               let index = repositories.firstIndex(where: { $0.id == child.id }) {
+                let displayName = worktreeDisplayName(for: entry)
+                let shouldRestartWatcher = repositories[index].path != entry.path
+                if repositories[index].displayName != displayName
+                    || repositories[index].path != entry.path
+                    || repositories[index].groupID != parent.groupID
+                    || repositories[index].parentRepositoryID != parent.id
+                    || repositories[index].isAutoManaged != true {
+                    repositories[index].displayName = displayName
+                    repositories[index].path = entry.path
+                    repositories[index].groupID = parent.groupID
+                    repositories[index].parentRepositoryID = parent.id
+                    repositories[index].isAutoManaged = true
+                    updateSummaryRepository(repositories[index])
+                    if shouldRestartWatcher {
+                        restartWatcher(for: repositories[index])
+                    }
+                    mutated = true
+                }
+                continue
             }
+
+            if let index = repositories.firstIndex(where: { repo in
+                repo.isAutoManaged && canonicalPath(repo.path) == canonical
+            }) {
+                repositories[index].displayName = worktreeDisplayName(for: entry)
+                repositories[index].path = entry.path
+                repositories[index].groupID = parent.groupID
+                repositories[index].parentRepositoryID = parent.id
+                repositories[index].isAutoManaged = true
+                updateSummaryRepository(repositories[index])
+                restartWatcher(for: repositories[index])
+                mutated = true
+                continue
+            }
+
             let child = RepositoryConfig(
-                displayName: displayName,
+                displayName: worktreeDisplayName(for: entry),
                 path: entry.path,
                 groupID: parent.groupID,
                 parentRepositoryID: parent.id,
@@ -446,6 +516,13 @@ final class DiffyStore: ObservableObject {
 
         if mutated {
             save()
+        }
+    }
+
+    private func worktreeDisplayName(for entry: WorktreeEntry) -> String {
+        switch entry.branch {
+        case .branch(let name): name
+        default: URL(fileURLWithPath: entry.path).lastPathComponent
         }
     }
 
@@ -475,9 +552,7 @@ final class DiffyStore: ObservableObject {
     }
 
     private func startWatcher(for repository: RepositoryConfig) {
-        let gitdir: String? = repository.parentRepositoryID == nil
-            ? nil
-            : resolveLinkedWorktreeGitdir(at: repository.path)
+        let gitdir = resolveLinkedWorktreeGitdir(at: repository.path)
 
         let watcher = RepositoryWatcher(repositoryPath: repository.path, gitdirPath: gitdir) { [weak self] in
             Task { @MainActor in
@@ -488,6 +563,12 @@ final class DiffyStore: ObservableObject {
         if watcher.start() {
             watchers[repository.id] = watcher
         }
+    }
+
+    private func restartWatcher(for repository: RepositoryConfig) {
+        watchers[repository.id]?.stop()
+        watchers.removeValue(forKey: repository.id)
+        startWatcher(for: repository)
     }
 
     private static func defaultStorageURL() -> URL {

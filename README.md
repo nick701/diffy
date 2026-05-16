@@ -10,7 +10,7 @@ Diffy is local-only. It does not use GitHub, GitLab, Bitbucket, PRs, issues, clo
 
 ## Status
 
-v0.3.2 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not notarized). Install instructions below handle Gatekeeper automatically.
+v0.4.1 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not notarized). Install instructions below handle Gatekeeper automatically.
 
 ## Features
 
@@ -21,7 +21,7 @@ v0.3.2 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs 
 - Window close hides Diffy back to the menu bar (no quit); ⌘Q or right-click → Quit to actually exit.
 - Per-repo detail pane: staged and unstaged changed-file sections with status labels (`M`, `A`, `D`, `U`, `C`, `!`) and per-file `+a / -b`.
 - **Branch labels** on every row (popover, sidebar, detail pane). Detached HEAD shows the short SHA in italics.
-- **Linked worktrees** discovered automatically from `git worktree list --porcelain` and shown as indented sub-rows under their parent repo, each with their own diff stats and branch. Per-worktree "Exclude from group totals" toggle works the same way as for any other repo. Remove a finished worktree from inside Diffy via a confirmation dialog in the detail pane — Diffy never uses `--force`, so any uncommitted changes or untracked files in the worktree must be handled in your terminal first.
+- **Linked worktrees** discovered automatically from `git worktree list --porcelain` and shown as indented sub-rows under one family owner, each with their own diff stats and branch. Manually-added worktrees stay as top-level rows and are never duplicated under a sibling; the first manual row in a family owns only unadded siblings. Per-worktree "Exclude from group totals" works like any other repo. Remove a finished auto-managed worktree from inside Diffy via a confirmation dialog — Diffy never uses `--force`, so dirty worktrees must be handled in your terminal first.
 - Open changed files in a configured editor (Xcode, Cursor, VS Code, Zed, or a custom shell command).
 - **Launch at Login** toggle (requires Diffy installed to `/Applications`).
 - Filesystem-triggered refresh with polling fallback.
