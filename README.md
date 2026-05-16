@@ -41,10 +41,10 @@ The run script builds the SwiftPM target, creates `dist/Diffy.app`, ad-hoc signs
 ## Package a Release
 
 ```bash
-./script/package_release.sh 0.3.1 1
+./script/package_release.sh <version> <build>
 ```
 
-The zip is created at `dist/release/Diffy-0.3.1.zip`.
+The zip is created at `dist/release/Diffy-<version>.zip`.
 
 ## Install
 
