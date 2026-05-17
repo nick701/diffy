@@ -10,9 +10,9 @@ Diffy is local-only. It does not use GitHub, GitLab, Bitbucket, PRs, issues, clo
 
 ## Status
 
-v0.4.1 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not notarized). Install instructions below include the required manual Gatekeeper quarantine-clearing step.
+v0.4.2 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not notarized). Install instructions below include the required manual Gatekeeper quarantine-clearing step.
 
-Main currently contains unreleased Pass 1 bug-scan fixes. No new version has been published yet; the next release will be cut after Pass 2 is complete.
+This release contains the bug-audit Pass 1 fixes plus the Pass 2 documentation/release hygiene updates.
 
 ## Features
 
@@ -27,7 +27,7 @@ Main currently contains unreleased Pass 1 bug-scan fixes. No new version has bee
 - Open changed files in a configured editor (Xcode, Cursor, VS Code, Zed, or a custom shell command). Deleted-file rows are shown for context but are not opened from the working tree.
 - **Launch at Login** toggle (requires Diffy installed to `/Applications`).
 - Filesystem-triggered refresh with polling fallback.
-- Sparkle-ready update packaging for GitHub Releases.
+- Homebrew updates today, with Sparkle packaged behind release metadata for a future appcast.
 
 ## Build and Run Locally
 
