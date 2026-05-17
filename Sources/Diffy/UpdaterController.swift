@@ -5,6 +5,10 @@ import Sparkle
 final class UpdaterController {
     private let controller: SPUStandardUpdaterController?
 
+    var canCheckForUpdates: Bool {
+        controller != nil
+    }
+
     init() {
         let info = Bundle.main.infoDictionary ?? [:]
         guard

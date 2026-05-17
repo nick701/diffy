@@ -78,6 +78,13 @@ struct MainView: View {
                         .lineLimit(2)
                 }
 
+                if let loadError = store.lastLoadError {
+                    Text(loadError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .lineLimit(3)
+                }
+
                 Toggle(isOn: launchAtLoginBinding) {
                     Text("Launch at Login")
                 }
@@ -94,6 +101,12 @@ struct MainView: View {
                     Button("Check for Updates…") {
                         updaterController.checkForUpdates()
                     }
+                    .disabled(!updaterController.canCheckForUpdates)
+                    .help(
+                        updaterController.canCheckForUpdates
+                            ? "Check for updates"
+                            : "Updates are unavailable in this build."
+                    )
                     Spacer()
                     Text(Self.versionString)
                         .font(.caption)
@@ -198,6 +211,7 @@ private struct GroupSectionView: View {
     @State private var showingBadgeEditor = false
     @State private var isDropTargeted = false
     @State private var nameDraft: String = ""
+    @FocusState private var isNameFocused: Bool
 
     private var groupRepos: [RepositoryConfig] {
         store.repositories.filter { $0.groupID == group.id }
@@ -268,8 +282,14 @@ private struct GroupSectionView: View {
             TextField("Group name", text: $nameDraft)
                 .textFieldStyle(.plain)
                 .font(.subheadline.weight(.semibold))
+                .focused($isNameFocused)
                 .onSubmit {
-                    store.renameGroup(group.id, to: nameDraft)
+                    commitName()
+                }
+                .onChange(of: isNameFocused) { _, focused in
+                    if !focused {
+                        commitName()
+                    }
                 }
 
             Spacer(minLength: 4)
@@ -355,6 +375,10 @@ private struct GroupSectionView: View {
         var order = store.groups.map { $0.id }
         order.swapAt(index, index + 1)
         store.reorderGroups(order)
+    }
+
+    private func commitName() {
+        store.renameGroup(group.id, to: nameDraft)
     }
 }
 

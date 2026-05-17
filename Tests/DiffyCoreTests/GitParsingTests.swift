@@ -58,6 +58,26 @@ final class GitParsingTests: XCTestCase {
         )
     }
 
+    func testDeletedFileSummaryIsNotOpenableFromWorkingTree() {
+        let deleted = ChangedFileSummary(
+            path: "Removed.swift",
+            displayStatus: GitChangeStatus.deleted.displayStatus,
+            addedLines: 0,
+            removedLines: 4,
+            section: .unstaged
+        )
+        let modified = ChangedFileSummary(
+            path: "Changed.swift",
+            displayStatus: GitChangeStatus.modified.displayStatus,
+            addedLines: 1,
+            removedLines: 1,
+            section: .unstaged
+        )
+
+        XCTAssertFalse(deleted.isOpenableFromWorkingTree)
+        XCTAssertTrue(modified.isOpenableFromWorkingTree)
+    }
+
     func testBuildsSummaryWithSeparateStagedAndUnstagedSections() {
         let stagedStats = [
             "Sources/App.swift": FileLineStat(addedLines: 4, removedLines: 1, isBinary: false)

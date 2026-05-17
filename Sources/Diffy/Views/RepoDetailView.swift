@@ -6,6 +6,7 @@ struct RepoDetailView: View {
     let repositoryID: UUID
     @State private var customCommand: String = ""
     @State private var pendingWorktreeRemoval: UUID?
+    @FocusState private var isCustomCommandFocused: Bool
 
     private var repository: RepositoryConfig? {
         store.repositories.first { $0.id == repositoryID }
@@ -169,8 +170,14 @@ struct RepoDetailView: View {
                 if editorChoice(for: repository) == .custom {
                     TextField("open -a Cursor {path}", text: $customCommand)
                         .textFieldStyle(.roundedBorder)
+                        .focused($isCustomCommandFocused)
                         .onSubmit {
-                            store.updateEditor(for: repository, editor: .command(customCommand))
+                            commitCustomCommand(for: repository)
+                        }
+                        .onChange(of: isCustomCommandFocused) { _, focused in
+                            if !focused {
+                                commitCustomCommand(for: repository)
+                            }
                         }
                 }
             }
@@ -212,6 +219,9 @@ struct RepoDetailView: View {
                 customCommand = command
             }
         }
+        .onDisappear {
+            commitCustomCommand(for: repository)
+        }
     }
 
     @ViewBuilder
@@ -244,6 +254,11 @@ struct RepoDetailView: View {
 
     private func editorChoice(for repository: RepositoryConfig) -> EditorChoice {
         EditorChoice(editor: repository.editor)
+    }
+
+    private func commitCustomCommand(for repository: RepositoryConfig) {
+        guard editorChoice(for: repository) == .custom else { return }
+        store.updateEditor(for: repository, editor: .command(customCommand))
     }
 
     private func editorBinding(for repository: RepositoryConfig) -> Binding<EditorChoice> {
@@ -305,6 +320,8 @@ private struct FileSectionView: View {
                             FileRowView(file: file, diffColors: diffColors)
                         }
                         .buttonStyle(.plain)
+                        .disabled(!file.isOpenableFromWorkingTree)
+                        .help(file.isOpenableFromWorkingTree ? "Open file" : "Deleted files cannot be opened from the working tree.")
                     }
                 }
                 .background(Color.secondary.opacity(0.05))

@@ -75,7 +75,9 @@ final class StatusItemManager: NSObject {
                 }
             }
 
+            let displayName = group.name.isEmpty ? "Diffy" : group.name
             let newState = BadgeState(
+                displayName: displayName,
                 added: added,
                 removed: removed,
                 visibleRepoCount: visibleRepos.count,
@@ -93,7 +95,6 @@ final class StatusItemManager: NSObject {
                         badgeLabel: group.badgeLabel
                     )
                     button.imagePosition = .imageOnly
-                    let displayName = group.name.isEmpty ? "Diffy" : group.name
                     button.toolTip = "\(displayName) — \(visibleRepos.count) visible \(visibleRepos.count == 1 ? "repo" : "repos")"
                 }
                 item.lastBadgeState = newState
@@ -218,7 +219,8 @@ private struct GroupStatusItem {
     var lastBadgeState: BadgeState?
 }
 
-private struct BadgeState: Equatable {
+struct BadgeState: Equatable {
+    let displayName: String
     let added: Int
     let removed: Int
     let visibleRepoCount: Int

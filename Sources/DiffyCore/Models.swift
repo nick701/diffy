@@ -215,6 +215,7 @@ public struct RepoDiffSummary: Equatable, Sendable {
 
 public struct ChangedFileSummary: Identifiable, Equatable, Hashable, Sendable {
     public var id: String { "\(section.rawValue):\(path)" }
+    public var isOpenableFromWorkingTree: Bool { displayStatus != GitChangeStatus.deleted.displayStatus }
     public var path: String
     public var displayStatus: String
     public var addedLines: Int

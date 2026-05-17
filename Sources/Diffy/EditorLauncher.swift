@@ -4,6 +4,8 @@ import Foundation
 
 enum EditorLauncher {
     static func open(file: ChangedFileSummary, in repository: RepositoryConfig) {
+        guard file.isOpenableFromWorkingTree else { return }
+
         let fileURL = URL(fileURLWithPath: repository.path).appendingPathComponent(file.path)
 
         switch repository.editor {

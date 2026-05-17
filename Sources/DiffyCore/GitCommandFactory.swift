@@ -17,6 +17,7 @@ public enum GitReadCommandKind: CaseIterable, Sendable {
     case unstagedNumstat
     case porcelainStatus
     case worktreeListPorcelain
+    case isInsideWorkTree
 }
 
 public enum GitCommandFactory {
@@ -37,6 +38,8 @@ public enum GitCommandFactory {
             suffix = ["status", "--porcelain=v1", "-z", "--untracked-files=all"]
         case .worktreeListPorcelain:
             suffix = ["worktree", "list", "--porcelain"]
+        case .isInsideWorkTree:
+            suffix = ["rev-parse", "--is-inside-work-tree"]
         }
 
         return GitCommand(arguments: base + suffix, environment: ["GIT_OPTIONAL_LOCKS": "0"])

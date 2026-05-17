@@ -16,6 +16,7 @@ final class DiffyStore: ObservableObject {
     /// Read by the UI via `isGitMainWorktree(repositoryID:)`.
     @Published private(set) var lastWorktreeEntries: [UUID: [WorktreeEntry]] = [:]
     @Published private(set) var lastAddError: String?
+    @Published private(set) var lastLoadError: String?
     @Published private(set) var lastWorktreeRemovalError: String?
 
     private let gitClient = GitClient()
@@ -30,7 +31,14 @@ final class DiffyStore: ObservableObject {
 
     func load() {
         guard let data = try? Data(contentsOf: storageURL) else { return }
-        guard let state = try? StoredStateMigration.decode(data) else { return }
+        let state: StoredState
+        do {
+            state = try StoredStateMigration.decode(data)
+        } catch {
+            lastLoadError = "Failed to load saved repositories: \(error.localizedDescription)"
+            return
+        }
+        lastLoadError = nil
         groups = state.groups
         repositories = state.repositories
         if normalizeRepositoryRows() {
@@ -112,6 +120,13 @@ final class DiffyStore: ObservableObject {
             return
         }
 
+        do {
+            try gitClient.validateRepository(path: url.path)
+        } catch {
+            lastAddError = error.localizedDescription
+            return
+        }
+
         let group = RepositoryGroup(name: url.lastPathComponent)
         groups.append(group)
 
@@ -163,6 +178,7 @@ final class DiffyStore: ObservableObject {
 
     func updateEditor(for repository: RepositoryConfig, editor: EditorPreference) {
         guard let index = repositories.firstIndex(where: { $0.id == repository.id }) else { return }
+        guard repositories[index].editor != editor else { return }
         repositories[index].editor = editor
         updateSummaryRepository(repositories[index])
         save()
@@ -307,13 +323,15 @@ final class DiffyStore: ObservableObject {
         if includeHidden {
             orderedParents = parents.filter { !$0.isHidden } + parents.filter { $0.isHidden }
         } else {
-            orderedParents = parents.filter { !$0.isHidden }
+            orderedParents = parents
         }
 
         var result: [RepositoryConfig] = []
         result.reserveCapacity(inGroup.count)
         for parent in orderedParents {
-            result.append(parent)
+            if includeHidden || !parent.isHidden {
+                result.append(parent)
+            }
             let children = repositories.filter { $0.parentRepositoryID == parent.id }
             result.append(contentsOf: includeHidden ? children : children.filter { !$0.isHidden })
         }

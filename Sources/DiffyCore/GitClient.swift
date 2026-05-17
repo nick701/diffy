@@ -142,6 +142,21 @@ public struct GitClient: @unchecked Sendable {
         return GitWorktreeParser.parse(output)
     }
 
+    public func validateRepository(path: String) throws {
+        guard fileManager.fileExists(atPath: path) else {
+            throw GitClientError.invalidRepository(path)
+        }
+
+        do {
+            let output = try runner.run(GitCommandFactory.command(for: .isInsideWorkTree, repositoryPath: path))
+            guard output.trimmingCharacters(in: .whitespacesAndNewlines) == "true" else {
+                throw GitClientError.invalidRepository(path)
+            }
+        } catch {
+            throw GitClientError.invalidRepository(path)
+        }
+    }
+
     private func statForUntrackedFile(repositoryPath: String, relativePath: String) -> FileLineStat {
         let url = URL(fileURLWithPath: repositoryPath).appendingPathComponent(relativePath)
 

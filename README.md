@@ -10,7 +10,9 @@ Diffy is local-only. It does not use GitHub, GitLab, Bitbucket, PRs, issues, clo
 
 ## Status
 
-v0.4.1 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not notarized). Install instructions below handle Gatekeeper automatically.
+v0.4.1 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not notarized). Install instructions below include the required manual Gatekeeper quarantine-clearing step.
+
+Main currently contains unreleased Pass 1 bug-scan fixes. No new version has been published yet; the next release will be cut after Pass 2 is complete.
 
 ## Features
 
@@ -22,7 +24,7 @@ v0.4.1 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs 
 - Per-repo detail pane: staged and unstaged changed-file sections with status labels (`M`, `A`, `D`, `U`, `C`, `!`) and per-file `+a / -b`.
 - **Branch labels** on every row (popover, sidebar, detail pane). Detached HEAD shows the short SHA in italics.
 - **Linked worktrees** discovered automatically from `git worktree list --porcelain` and shown as indented sub-rows under one family owner, each with their own diff stats and branch. Manually-added worktrees stay as top-level rows and are never duplicated under a sibling; the first manual row in a family owns only unadded siblings. Per-worktree "Exclude from group totals" works like any other repo. Remove a finished auto-managed worktree from inside Diffy via a confirmation dialog — Diffy never uses `--force`, so dirty worktrees must be handled in your terminal first.
-- Open changed files in a configured editor (Xcode, Cursor, VS Code, Zed, or a custom shell command).
+- Open changed files in a configured editor (Xcode, Cursor, VS Code, Zed, or a custom shell command). Deleted-file rows are shown for context but are not opened from the working tree.
 - **Launch at Login** toggle (requires Diffy installed to `/Applications`).
 - Filesystem-triggered refresh with polling fallback.
 - Sparkle-ready update packaging for GitHub Releases.
@@ -71,4 +73,4 @@ Diffy includes Sparkle integration, but update checks are enabled only in releas
 
 ## Read-Only Guarantee
 
-Diffy is read-only with one explicit, user-initiated exception: removing a linked worktree via the in-app confirmation dialog (which runs `git worktree remove <path>` without `--force`). All other git operations Diffy performs (`diff`, `status`, `worktree list`) are strictly observational, run with `GIT_OPTIONAL_LOCKS=0` and `--no-optional-locks`. Diffy never stages, commits, checks out, cleans, resets, rebases, merges, or otherwise mutates a repository's working tree.
+Diffy is read-only with one explicit, user-initiated exception: removing a linked worktree via the in-app confirmation dialog (which runs `git worktree remove <path>` without `--force`). All other git operations Diffy performs (`diff`, `status`, `worktree list`, `rev-parse --is-inside-work-tree`) are strictly observational, run with `GIT_OPTIONAL_LOCKS=0` and `--no-optional-locks`. Diffy never stages, commits, checks out, cleans, resets, rebases, merges, or otherwise mutates a repository's working tree.

@@ -197,6 +197,8 @@ private struct RepoBlock: View {
                             CompactFileRow(file: file, diffColors: groupColors)
                         }
                         .buttonStyle(.plain)
+                        .disabled(!file.isOpenableFromWorkingTree)
+                        .help(file.isOpenableFromWorkingTree ? "Open file" : "Deleted files cannot be opened from the working tree.")
                     }
                 }
             }

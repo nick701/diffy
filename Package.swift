@@ -29,6 +29,10 @@ let package = Package(
         .testTarget(
             name: "DiffyCoreTests",
             dependencies: ["DiffyCore"]
+        ),
+        .testTarget(
+            name: "DiffyTests",
+            dependencies: ["Diffy"]
         )
     ]
 )
