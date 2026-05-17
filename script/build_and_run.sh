@@ -18,6 +18,11 @@ clean_code_signing_xattrs() {
   xattr -cr "$bundle_path" 2>/dev/null || true
   xattr -cr -s "$bundle_path" 2>/dev/null || true
 
+  while IFS= read -r -d '' file_path; do
+    xattr -c "$file_path" 2>/dev/null || true
+    xattr -c -s "$file_path" 2>/dev/null || true
+  done < <(find -H "$bundle_path" "$bundle_path/Contents/Frameworks/Sparkle.framework/Versions/Current" -print0 2>/dev/null || true)
+
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     offenders="$(
       xattr -lr "$bundle_path" 2>/dev/null \

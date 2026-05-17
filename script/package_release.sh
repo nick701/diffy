@@ -8,12 +8,15 @@ VERSION="${1:-0.4.2}"
 BUILD_NUMBER="${2:-1}"
 DIST_DIR="$ROOT_DIR/dist"
 RELEASE_DIR="$DIST_DIR/release"
-APP_DIR="$RELEASE_DIR/$APP_NAME.app"
+STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/diffy-release.XXXXXX")"
+APP_DIR="$STAGING_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 ZIP_PATH="$RELEASE_DIR/$APP_NAME-$VERSION.zip"
+
+trap 'rm -rf "$STAGING_DIR"' EXIT
 
 clean_code_signing_xattrs() {
   local bundle_path="$1"
@@ -21,6 +24,11 @@ clean_code_signing_xattrs() {
 
   xattr -cr "$bundle_path" 2>/dev/null || true
   xattr -cr -s "$bundle_path" 2>/dev/null || true
+
+  while IFS= read -r -d '' file_path; do
+    xattr -c "$file_path" 2>/dev/null || true
+    xattr -c -s "$file_path" 2>/dev/null || true
+  done < <(find -H "$bundle_path" "$bundle_path/Contents/Frameworks/Sparkle.framework/Versions/Current" -print0 2>/dev/null || true)
 
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     offenders="$(
@@ -49,7 +57,7 @@ cd "$ROOT_DIR"
 swift build --configuration release
 
 rm -rf "$RELEASE_DIR"
-mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR" "$RESOURCES_DIR"
+mkdir -p "$RELEASE_DIR" "$MACOS_DIR" "$FRAMEWORKS_DIR" "$RESOURCES_DIR"
 cp "$ROOT_DIR/.build/release/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 
 if [[ -f "$ROOT_DIR/Resources/Diffy.icns" ]]; then
@@ -107,7 +115,9 @@ if ! codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>/dev/null; then
   clean_code_signing_xattrs "$APP_DIR"
   codesign --force --deep --sign - "$APP_DIR" >/dev/null
 fi
+codesign --verify --deep --strict --verbose=2 "$APP_DIR" >/dev/null
 ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP_PATH"
+ditto --norsrc "$APP_DIR" "$RELEASE_DIR/$APP_NAME.app"
 
 echo "Created $ZIP_PATH"
 echo "SHA256: $(shasum -a 256 "$ZIP_PATH" | cut -d' ' -f1)"
