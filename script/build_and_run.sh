@@ -15,6 +15,9 @@ clean_code_signing_xattrs() {
   local bundle_path="$1"
   local offenders
 
+  xattr -cr "$bundle_path" 2>/dev/null || true
+  xattr -cr -s "$bundle_path" 2>/dev/null || true
+
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     offenders="$(
       xattr -lr "$bundle_path" 2>/dev/null \
