@@ -14,6 +14,8 @@ v0.4.2 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs 
 
 This release contains the bug-audit Pass 1 fixes plus the Pass 2 documentation/release hygiene updates.
 
+Diffy is feature-complete for its original scope; future updates are expected to focus on maintenance and bug fixes rather than major new features.
+
 ## Features
 
 - **Groups**: every repo belongs to a group, and each group owns one menu-bar icon, one color scheme, and an optional small label (1–2 chars or an emoji, positioned around the `+/-` counts). New repos default to their own single-repo group; combine or split groups by drag-drop in the main window. A group with N repos shows the aggregate `+x / -y` of its (non-hidden) members.
@@ -28,6 +30,20 @@ This release contains the bug-audit Pass 1 fixes plus the Pass 2 documentation/r
 - **Launch at Login** toggle (requires Diffy installed to `/Applications`).
 - Filesystem-triggered refresh with polling fallback.
 - Homebrew updates today, with Sparkle packaged behind release metadata for a future appcast.
+
+## Screenshots
+
+At a glance, Diffy lives in the menu bar and shows the current group's aggregate working-tree diff.
+
+![Diffy menu-bar item showing aggregate diff counts](assets/readme/menu-bar-status.png)
+
+Diffy's main window shows every tracked repository and worktree grouped by project, with aggregate additions and deletions visible before you open anything.
+
+![Diffy main window showing grouped repositories and worktrees](assets/readme/main-window-groups.png)
+
+The menu-bar popover breaks a group down by worktree, branch, changed file, status, and per-file diff counts.
+
+![Diffy menu-bar popover showing per-file diff breakdowns](assets/readme/menu-bar-breakdown.png)
 
 ## Build and Run Locally
 
