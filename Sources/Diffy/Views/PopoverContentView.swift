@@ -84,9 +84,6 @@ struct PopoverContentView: View {
                 Text("Add a repository or unhide one of this group's repositories from the main window.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Button("See all groups") {
-                    onOpenWindow()
-                }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(14)
@@ -205,10 +202,14 @@ private struct RepoBlock: View {
     private func section(title: String, files: [ChangedFileSummary]) -> some View {
         if !files.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
+                HStack(spacing: 5) {
+                    Text(title)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.25))
+                        .frame(height: 0.5)
+                }
                 VStack(spacing: 0) {
                     ForEach(files) { file in
                         Button {
@@ -229,6 +230,8 @@ private struct RepoBlock: View {
 private struct CompactFileRow: View {
     let file: ChangedFileSummary
     let diffColors: DiffColors
+
+    @State private var isHovering = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -263,6 +266,11 @@ private struct CompactFileRow: View {
             }
         }
         .padding(.vertical, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(isHovering ? Color.primary.opacity(0.04) : Color.clear)
+        )
         .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
     }
 }

@@ -12,24 +12,37 @@ struct GroupColorEditor: View {
 
     var body: some View {
         if let group {
-            HStack(spacing: 12) {
-                ColorPicker("Additions", selection: colorBinding(for: group, keyPath: \.additionHex))
-                    .labelsHidden()
-                    .help("Addition color")
-                ColorPicker("Removals", selection: colorBinding(for: group, keyPath: \.removalHex))
-                    .labelsHidden()
-                    .help("Removal color")
-                ColorPicker("Badge", selection: optionalColorBinding(for: group, keyPath: \.badgeBackgroundHex))
-                    .labelsHidden()
-                    .help("Menu bar badge background")
-                Button("Clear Background") {
-                    var colors = group.diffColors
-                    colors.badgeBackgroundHex = nil
-                    store.updateGroupColors(group.id, diffColors: colors)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    VStack(spacing: 2) {
+                        ColorPicker("Additions", selection: colorBinding(for: group, keyPath: \.additionHex))
+                            .labelsHidden()
+                            .help("Addition color")
+                        Text("Add").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    VStack(spacing: 2) {
+                        ColorPicker("Removals", selection: colorBinding(for: group, keyPath: \.removalHex))
+                            .labelsHidden()
+                            .help("Removal color")
+                        Text("Remove").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    VStack(spacing: 2) {
+                        ColorPicker("Badge", selection: optionalColorBinding(for: group, keyPath: \.badgeBackgroundHex))
+                            .labelsHidden()
+                            .help("Menu bar badge background")
+                        Text("Badge").font(.caption2).foregroundStyle(.secondary)
+                    }
                 }
-                .disabled(group.diffColors.badgeBackgroundHex == nil)
-                Button("Reset Colors") {
-                    store.updateGroupColors(group.id, diffColors: .default)
+                HStack(spacing: 8) {
+                    Button("Clear Background") {
+                        var colors = group.diffColors
+                        colors.badgeBackgroundHex = nil
+                        store.updateGroupColors(group.id, diffColors: colors)
+                    }
+                    .disabled(group.diffColors.badgeBackgroundHex == nil)
+                    Button("Reset Colors") {
+                        store.updateGroupColors(group.id, diffColors: .default)
+                    }
                 }
             }
         }

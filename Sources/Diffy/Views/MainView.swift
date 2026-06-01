@@ -1,3 +1,4 @@
+import AppKit
 import DiffyCore
 import SwiftUI
 
@@ -115,6 +116,7 @@ struct MainView: View {
             }
             .padding(12)
         }
+        .background(.regularMaterial)
         .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 380)
         .confirmationDialog(
             confirmationTitle,
@@ -248,11 +250,15 @@ private struct GroupSectionView: View {
             .padding(6)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isDropTargeted ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.05))
+                    .fill(isDropTargeted ? Color.accentColor.opacity(0.12) : Color(nsColor: .controlBackgroundColor))
+                    .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isDropTargeted ? Color.accentColor : Color.clear, lineWidth: 1)
+                    .stroke(
+                        isDropTargeted ? Color.accentColor : Color.primary.opacity(0.06),
+                        lineWidth: isDropTargeted ? 1 : 0.5
+                    )
             )
             .dropDestination(for: String.self) { items, _ in
                 guard let raw = items.first, let repoID = UUID(uuidString: raw) else { return false }
@@ -285,6 +291,7 @@ private struct GroupSectionView: View {
             TextField("Group name", text: $nameDraft)
                 .textFieldStyle(.plain)
                 .font(.subheadline.weight(.semibold))
+                .frame(minWidth: 60)
                 .focused($isNameFocused)
                 .onSubmit {
                     commitName()
@@ -361,6 +368,7 @@ private struct GroupSectionView: View {
                 .buttonStyle(.borderless)
                 .help("Remove group")
             }
+            .fixedSize()
         }
     }
 
@@ -393,6 +401,8 @@ private struct RepoSidebarRow: View {
     let groupColors: DiffColors
     let isSelected: Bool
     let onSelect: () -> Void
+
+    @State private var isHovering = false
 
     private var summary: RepoDiffSummary? {
         store.summaries[repository.id]
@@ -448,8 +458,11 @@ private struct RepoSidebarRow: View {
         .padding(.leading, isChild ? 16 : 0)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+                .fill(isSelected ? Color.accentColor.opacity(0.2) : (isHovering ? Color.primary.opacity(0.05) : Color.clear))
+                .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isSelected)
+                .animation(.easeOut(duration: 0.1), value: isHovering)
         )
+        .onHover { isHovering = $0 }
     }
 }
 

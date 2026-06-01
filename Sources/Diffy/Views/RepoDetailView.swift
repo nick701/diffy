@@ -6,6 +6,7 @@ struct RepoDetailView: View {
     let repositoryID: UUID
     @State private var customCommand: String = ""
     @State private var pendingWorktreeRemoval: UUID?
+    @State private var showingRemoveConfirmation = false
     @FocusState private var isCustomCommandFocused: Bool
 
     private var repository: RepositoryConfig? {
@@ -153,33 +154,40 @@ struct RepoDetailView: View {
             Text("Settings")
                 .font(.headline)
 
-            HStack {
-                Text("Open in")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 64, alignment: .leading)
-                Picker("", selection: editorBinding(for: repository)) {
-                    Text("System Default").tag(EditorChoice.systemDefault)
-                    Text("Xcode").tag(EditorChoice.xcode)
-                    Text("Cursor").tag(EditorChoice.cursor)
-                    Text("VS Code").tag(EditorChoice.vsCode)
-                    Text("Zed").tag(EditorChoice.zed)
-                    Text("Custom Command").tag(EditorChoice.custom)
-                }
-                .labelsHidden()
-                .frame(width: 200)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Open in")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 64, alignment: .leading)
+                    Picker("", selection: editorBinding(for: repository)) {
+                        Text("System Default").tag(EditorChoice.systemDefault)
+                        Text("Xcode").tag(EditorChoice.xcode)
+                        Text("Cursor").tag(EditorChoice.cursor)
+                        Text("VS Code").tag(EditorChoice.vsCode)
+                        Text("Zed").tag(EditorChoice.zed)
+                        Text("Custom Command").tag(EditorChoice.custom)
+                    }
+                    .labelsHidden()
+                    .frame(width: 200)
 
-                if editorChoice(for: repository) == .custom {
-                    TextField("open -a Cursor {path}", text: $customCommand)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($isCustomCommandFocused)
-                        .onSubmit {
-                            commitCustomCommand(for: repository)
-                        }
-                        .onChange(of: isCustomCommandFocused) { _, focused in
-                            if !focused {
+                    if editorChoice(for: repository) == .custom {
+                        TextField("open -a Cursor {path}", text: $customCommand)
+                            .textFieldStyle(.roundedBorder)
+                            .focused($isCustomCommandFocused)
+                            .onSubmit {
                                 commitCustomCommand(for: repository)
                             }
-                        }
+                            .onChange(of: isCustomCommandFocused) { _, focused in
+                                if !focused {
+                                    commitCustomCommand(for: repository)
+                                }
+                            }
+                    }
+                }
+                if editorChoice(for: repository) == .custom {
+                    Text("Supports {path} and {repo} placeholders")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
             }
 
@@ -203,18 +211,30 @@ struct RepoDetailView: View {
                 }
             }
 
-            Toggle("Exclude from group totals", isOn: hiddenBinding(for: repository))
+            Toggle("Count toward group totals", isOn: includedBinding(for: repository))
                 .toggleStyle(.switch)
 
             if repository.isAutoManaged {
                 worktreeRemovalControls(for: repository)
             } else {
                 Button(role: .destructive) {
-                    store.removeRepository(repository)
+                    showingRemoveConfirmation = true
                 } label: {
                     Label("Remove Repository", systemImage: "trash")
                 }
             }
+        }
+        .confirmationDialog(
+            "Remove \"\(repository.displayName)\"?",
+            isPresented: $showingRemoveConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                store.removeRepository(repository)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will remove the repository from Diffy. The files on disk are not affected.")
         }
         .onAppear {
             if case .command(let command) = repository.editor {
@@ -285,11 +305,11 @@ struct RepoDetailView: View {
         }
     }
 
-    private func hiddenBinding(for repository: RepositoryConfig) -> Binding<Bool> {
+    private func includedBinding(for repository: RepositoryConfig) -> Binding<Bool> {
         Binding {
-            repository.isHidden
+            !repository.isHidden
         } set: { newValue in
-            store.setHidden(repository.id, isHidden: newValue)
+            store.setHidden(repository.id, isHidden: !newValue)
         }
     }
 }
@@ -302,10 +322,14 @@ private struct FileSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.25))
+                    .frame(height: 0.5)
+            }
 
             if files.isEmpty {
                 Text("None")
@@ -336,6 +360,8 @@ private struct FileSectionView: View {
 private struct FileRowView: View {
     let file: ChangedFileSummary
     let diffColors: DiffColors
+
+    @State private var isHovering = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -376,7 +402,12 @@ private struct FileRowView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(isHovering ? Color.primary.opacity(0.04) : Color.clear)
+        )
         .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
     }
 }
 
