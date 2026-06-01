@@ -6,7 +6,8 @@ enum BadgeRenderer {
         added: Int,
         removed: Int,
         colors: DiffColors,
-        badgeLabel: BadgeLabel? = nil
+        badgeLabel: BadgeLabel? = nil,
+        hasError: Bool = false
     ) -> NSImage {
         let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .medium)
         let additionColor = AppColor.nsColor(hex: colors.additionHex) ?? .systemGreen
@@ -17,6 +18,20 @@ enum BadgeRenderer {
         countsText.append(NSAttributedString(string: "+\(added)", attributes: [.foregroundColor: additionColor, .font: font]))
         countsText.append(NSAttributedString(string: " / ", attributes: [.foregroundColor: separatorColor, .font: font]))
         countsText.append(NSAttributedString(string: "-\(removed)", attributes: [.foregroundColor: removalColor, .font: font]))
+
+        if hasError {
+            let symbolConfig = NSImage.SymbolConfiguration(paletteColors: [.systemOrange])
+                .applying(NSImage.SymbolConfiguration(pointSize: font.pointSize, weight: .semibold))
+            if let symbol = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "error")?
+                .withSymbolConfiguration(symbolConfig) {
+                let attachment = NSTextAttachment()
+                attachment.image = symbol
+                let yOffset = (font.capHeight - symbol.size.height) / 2
+                attachment.bounds = CGRect(x: 0, y: yOffset, width: symbol.size.width, height: symbol.size.height)
+                countsText.append(NSAttributedString(string: " ", attributes: [.font: font]))
+                countsText.append(NSAttributedString(attachment: attachment))
+            }
+        }
 
         let countsSize = countsText.size()
         let horizontalPadding: CGFloat = colors.badgeBackgroundHex == nil ? 1 : 8

@@ -68,21 +68,25 @@ final class StatusItemManager: NSObject {
             let visibleRepos = repositories.filter { $0.groupID == group.id && !$0.isHidden }
             var added = 0
             var removed = 0
+            var errorCount = 0
             for repo in visibleRepos {
                 if let summary = summaries[repo.id] {
                     added += summary.addedLines
                     removed += summary.removedLines
+                    if summary.errorMessage != nil { errorCount += 1 }
                 }
             }
 
             let displayName = group.name.isEmpty ? "Diffy" : group.name
+            let hasError = errorCount > 0
             let newState = BadgeState(
                 displayName: displayName,
                 added: added,
                 removed: removed,
                 visibleRepoCount: visibleRepos.count,
                 colors: group.diffColors,
-                badgeLabel: group.badgeLabel
+                badgeLabel: group.badgeLabel,
+                hasError: hasError
             )
 
             if item.lastBadgeState != newState {
@@ -92,10 +96,15 @@ final class StatusItemManager: NSObject {
                         added: added,
                         removed: removed,
                         colors: group.diffColors,
-                        badgeLabel: group.badgeLabel
+                        badgeLabel: group.badgeLabel,
+                        hasError: hasError
                     )
                     button.imagePosition = .imageOnly
-                    button.toolTip = "\(displayName) — \(visibleRepos.count) visible \(visibleRepos.count == 1 ? "repo" : "repos")"
+                    var tip = "\(displayName) — \(visibleRepos.count) visible \(visibleRepos.count == 1 ? "repo" : "repos")"
+                    if errorCount > 0 {
+                        tip += " (\(errorCount) with errors)"
+                    }
+                    button.toolTip = tip
                 }
                 item.lastBadgeState = newState
                 items[group.id] = item
@@ -227,6 +236,7 @@ struct BadgeState: Equatable {
     let visibleRepoCount: Int
     let colors: DiffColors
     let badgeLabel: BadgeLabel?
+    let hasError: Bool
 }
 
 @MainActor
