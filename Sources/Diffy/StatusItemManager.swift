@@ -225,6 +225,8 @@ final class StatusItemManager: NSObject {
 private struct GroupStatusItem {
     let statusItem: NSStatusItem
     let popover: NSPopover
+    /// Required retain anchor: `NSControl.target` is non-owning, so this is the only strong
+    /// reference keeping the click handler alive. Removing it silently breaks clicks (no warning).
     let clickHandler: StatusItemClickHandler
     var lastBadgeState: BadgeState?
 }

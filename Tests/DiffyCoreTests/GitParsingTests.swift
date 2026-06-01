@@ -49,6 +49,38 @@ final class GitParsingTests: XCTestCase {
         XCTAssertEqual(statuses["Removed.swift"]?.unstagedStatus, .deleted)
     }
 
+    func testParsesPorcelainRenameAndCopyKeyingNewPathAndSkippingOrigin() {
+        // `git status --porcelain=v1 -z` emits renames/copies as two NUL-separated records,
+        // NEW path first: `R  new\0old\0` (verified empirically). The parser keys the NEW path
+        // and skips the origin record. A trailing normal record proves the index advanced past
+        // both two-record entries.
+        let output = "R  new.swift\u{0}old.swift\u{0}C  copy.swift\u{0}orig.swift\u{0} M other.swift\u{0}"
+
+        let statuses = GitStatusParser.parsePorcelainV1Z(output)
+
+        XCTAssertEqual(statuses.count, 3)
+        XCTAssertEqual(statuses["new.swift"]?.stagedStatus, .renamed)
+        XCTAssertNil(statuses["new.swift"]?.unstagedStatus)
+        XCTAssertEqual(statuses["copy.swift"]?.stagedStatus, .copied)
+        XCTAssertNil(statuses["old.swift"])
+        XCTAssertNil(statuses["orig.swift"])
+        XCTAssertEqual(statuses["other.swift"]?.unstagedStatus, .modified)
+    }
+
+    func testBuildsSummaryRendersRenamedStagedFileAsR() {
+        // numstat and status both key the NEW path for a rename, so the join must surface "R".
+        let summary = RepoDiffBuilder.build(
+            repository: RepositoryConfig(displayName: "Diffy", path: "/tmp/diffy", groupID: UUID()),
+            stagedStats: ["src/new.swift": FileLineStat(addedLines: 3, removedLines: 1, isBinary: false)],
+            unstagedStats: [:],
+            statuses: ["src/new.swift": GitPathStatus(stagedStatus: .renamed, unstagedStatus: nil)],
+            untrackedStats: [:]
+        )
+
+        XCTAssertEqual(summary.stagedFiles.map(\.path), ["src/new.swift"])
+        XCTAssertEqual(summary.stagedFiles.first?.displayStatus, "R")
+    }
+
     func testConflictedAndCopiedHaveDistinctDisplayGlyphs() {
         XCTAssertEqual(GitChangeStatus.copied.displayStatus, "C")
         XCTAssertEqual(GitChangeStatus.conflicted.displayStatus, "!")
