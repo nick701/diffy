@@ -107,8 +107,7 @@ final class StatusItemManager: NSObject {
         let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         let popover = NSPopover()
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 420, height: 520)
-        popover.contentViewController = NSHostingController(
+        let hosting = NSHostingController(
             rootView: PopoverContentView(
                 store: store,
                 groupID: group.id,
@@ -118,6 +117,8 @@ final class StatusItemManager: NSObject {
                 }
             )
         )
+        hosting.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hosting
 
         let handler = StatusItemClickHandler(groupID: group.id) { [weak self] event in
             self?.handleClick(groupID: group.id, event: event)

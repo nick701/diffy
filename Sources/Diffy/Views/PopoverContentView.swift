@@ -6,6 +6,9 @@ struct PopoverContentView: View {
     let groupID: UUID
     let onOpenWindow: () -> Void
 
+    @State private var contentHeight: CGFloat = 0
+    private let bodyCap: CGFloat = 520
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -14,7 +17,7 @@ struct PopoverContentView: View {
             Divider()
             footer
         }
-        .frame(width: 420, height: 520)
+        .frame(width: 420)
     }
 
     private var group: RepositoryGroup? {
@@ -72,7 +75,7 @@ struct PopoverContentView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(14)
         } else if groupRepos.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
@@ -85,7 +88,7 @@ struct PopoverContentView: View {
                     onOpenWindow()
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .padding(14)
         } else {
             ScrollView {
@@ -96,7 +99,13 @@ struct PopoverContentView: View {
                     }
                 }
                 .padding(14)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.height
+                } action: { newHeight in
+                    contentHeight = newHeight
+                }
             }
+            .frame(height: contentHeight == 0 ? nil : min(contentHeight, bodyCap))
         }
     }
 
@@ -112,6 +121,13 @@ struct PopoverContentView: View {
 
             Spacer()
 
+            if let lastRefreshed {
+                Text(lastRefreshed, style: .relative)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
             Button("See all groups") {
                 onOpenWindow()
             }
@@ -119,6 +135,10 @@ struct PopoverContentView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private var lastRefreshed: Date? {
+        groupRepos.compactMap { store.summaries[$0.id]?.refreshedAt }.max()
     }
 
     private var aggregateTotals: (added: Int, removed: Int) {
