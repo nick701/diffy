@@ -156,6 +156,7 @@ struct RepoDetailView: View {
             HStack {
                 Text("Open in")
                     .foregroundStyle(.secondary)
+                    .frame(width: 64, alignment: .leading)
                 Picker("", selection: editorBinding(for: repository)) {
                     Text("System Default").tag(EditorChoice.systemDefault)
                     Text("Xcode").tag(EditorChoice.xcode)
@@ -183,9 +184,10 @@ struct RepoDetailView: View {
             }
 
             if !repository.isAutoManaged {
-                HStack {
+                HStack(spacing: 12) {
                     Text("Group")
                         .foregroundStyle(.secondary)
+                        .frame(width: 64, alignment: .leading)
                     Picker("", selection: groupBinding(for: repository)) {
                         ForEach(store.groups) { g in
                             Text(g.name.isEmpty ? "Unnamed group" : g.name).tag(g.id)
@@ -194,7 +196,7 @@ struct RepoDetailView: View {
                     .labelsHidden()
                     .frame(width: 220)
 
-                    Button("New Group From Repo") {
+                    Button("Move to New Group") {
                         let g = store.addGroup(name: repository.displayName)
                         store.moveRepository(repository.id, toGroup: g.id)
                     }

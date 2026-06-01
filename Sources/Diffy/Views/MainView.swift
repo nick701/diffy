@@ -275,6 +275,9 @@ private struct GroupSectionView: View {
                 nameDraft = newValue
             }
         }
+        .onChange(of: selectedRepoID) { _, _ in
+            isNameFocused = false
+        }
     }
 
     private var header: some View {
