@@ -116,8 +116,13 @@ if ! codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>/dev/null; then
   codesign --force --deep --sign - "$APP_DIR" >/dev/null
 fi
 codesign --verify --deep --strict --verbose=2 "$APP_DIR" >/dev/null
-ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP_PATH"
+(
+  cd "$STAGING_DIR"
+  COPYFILE_DISABLE=1 /usr/bin/zip -qry "$ZIP_PATH" "$APP_NAME.app"
+)
 ditto --norsrc "$APP_DIR" "$RELEASE_DIR/$APP_NAME.app"
+clean_code_signing_xattrs "$RELEASE_DIR/$APP_NAME.app"
+codesign --verify --deep --strict --verbose=2 "$RELEASE_DIR/$APP_NAME.app" >/dev/null
 
 echo "Created $ZIP_PATH"
 echo "SHA256: $(shasum -a 256 "$ZIP_PATH" | cut -d' ' -f1)"
