@@ -1,3 +1,4 @@
+import AppKit
 import DiffyCore
 import SwiftUI
 
@@ -7,6 +8,7 @@ struct PopoverContentView: View {
     let onOpenWindow: () -> Void
 
     @State private var contentHeight: CGFloat = 0
+    @State private var copyConfirmationID: UUID?
     private let bodyCap: CGFloat = 520
 
     var body: some View {
@@ -18,6 +20,13 @@ struct PopoverContentView: View {
             footer
         }
         .frame(width: 420)
+        .task(id: copyConfirmationID) {
+            guard let copyConfirmationID else { return }
+
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled, self.copyConfirmationID == copyConfirmationID else { return }
+            self.copyConfirmationID = nil
+        }
     }
 
     private var group: RepositoryGroup? {
@@ -91,7 +100,12 @@ struct PopoverContentView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
                     ForEach(orderedGroupRepos) { repository in
-                        RepoBlock(store: store, repository: repository, groupColors: headerColors)
+                        RepoBlock(
+                            store: store,
+                            repository: repository,
+                            groupColors: headerColors,
+                            onCopyPath: copyPath
+                        )
                             .padding(.leading, repository.parentRepositoryID == nil ? 0 : 16)
                     }
                 }
@@ -118,7 +132,12 @@ struct PopoverContentView: View {
 
             Spacer()
 
-            if let lastRefreshed {
+            if copyConfirmationID != nil {
+                Text("Path copied")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            } else if let lastRefreshed {
                 Text(lastRefreshed, style: .relative)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -149,12 +168,20 @@ struct PopoverContentView: View {
         }
         return (added, removed)
     }
+
+    private func copyPath(_ file: ChangedFileSummary, in repository: RepositoryConfig) {
+        let path = URL(fileURLWithPath: repository.path).appendingPathComponent(file.path).path
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(path, forType: .string)
+        copyConfirmationID = UUID()
+    }
 }
 
 private struct RepoBlock: View {
     @ObservedObject var store: DiffyStore
     let repository: RepositoryConfig
     let groupColors: DiffColors
+    let onCopyPath: (ChangedFileSummary, RepositoryConfig) -> Void
 
     private var summary: RepoDiffSummary? {
         store.summaries[repository.id]
@@ -212,14 +239,21 @@ private struct RepoBlock: View {
                 }
                 VStack(spacing: 0) {
                     ForEach(files) { file in
-                        Button {
-                            EditorLauncher.open(file: file, in: repository)
-                        } label: {
-                            CompactFileRow(file: file, diffColors: groupColors)
+                        ZStack {
+                            Button {
+                                EditorLauncher.open(file: file, in: repository)
+                            } label: {
+                                CompactFileRow(file: file, diffColors: groupColors)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!file.isOpenableFromWorkingTree)
+                            .help(file.isOpenableFromWorkingTree ? "Open file" : "Deleted files cannot be opened from the working tree.")
                         }
-                        .buttonStyle(.plain)
-                        .disabled(!file.isOpenableFromWorkingTree)
-                        .help(file.isOpenableFromWorkingTree ? "Open file" : "Deleted files cannot be opened from the working tree.")
+                        .contextMenu {
+                            Button("Copy Full Path") {
+                                onCopyPath(file, repository)
+                            }
+                        }
                     }
                 }
             }
