@@ -12,7 +12,7 @@ Run from the Mac terminal:
 ./script/package_release.sh <version> <build>
 ```
 
-The script builds `dist/release/Diffy.app`, ad-hoc signs it, and creates `dist/release/Diffy-<version>.zip`.
+The script builds and ad-hoc signs Diffy in temporary storage, creates `dist/release/Diffy-<version>.zip`, and verifies the app extracted from that archive.
 
 ## Sparkle Metadata
 

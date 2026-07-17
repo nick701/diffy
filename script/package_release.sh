@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="Diffy"
 BUNDLE_ID="com.nickt.diffy"
-VERSION="${1:-0.5.0}"
+VERSION="${1:-0.5.1}"
 BUILD_NUMBER="${2:-1}"
 DIST_DIR="$ROOT_DIR/dist"
 RELEASE_DIR="$DIST_DIR/release"
@@ -120,9 +120,11 @@ codesign --verify --deep --strict --verbose=2 "$APP_DIR" >/dev/null
   cd "$STAGING_DIR"
   COPYFILE_DISABLE=1 /usr/bin/zip -qry "$ZIP_PATH" "$APP_NAME.app"
 )
-ditto --norsrc "$APP_DIR" "$RELEASE_DIR/$APP_NAME.app"
-clean_code_signing_xattrs "$RELEASE_DIR/$APP_NAME.app"
-codesign --verify --deep --strict --verbose=2 "$RELEASE_DIR/$APP_NAME.app" >/dev/null
+
+VERIFY_DIR="$STAGING_DIR/verify"
+mkdir -p "$VERIFY_DIR"
+/usr/bin/unzip -q "$ZIP_PATH" -d "$VERIFY_DIR"
+codesign --verify --deep --strict --verbose=2 "$VERIFY_DIR/$APP_NAME.app" >/dev/null
 
 echo "Created $ZIP_PATH"
 echo "SHA256: $(shasum -a 256 "$ZIP_PATH" | cut -d' ' -f1)"

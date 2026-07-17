@@ -10,9 +10,9 @@ Diffy is local-only. It does not use GitHub, GitLab, Bitbucket, PRs, issues, clo
 
 ## Status
 
-v0.5.0 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not Developer ID signed or notarized). Install instructions below include the required manual Gatekeeper quarantine-clearing step.
+v0.5.1 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not Developer ID signed or notarized). Install instructions below include the required manual Gatekeeper quarantine-clearing step.
 
-This release adds on-demand recent commit history to every repository in the menu-bar popover, with per-commit changed-file statistics and local upstream status.
+This patch removes the ambiguous relative-time counter from the menu-bar popover footer. Automatic filesystem-triggered refresh and polling behavior are unchanged.
 
 Diffy is feature-complete for its original scope; future updates are expected to focus on maintenance and bug fixes rather than major new features.
 

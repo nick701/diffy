@@ -137,11 +137,6 @@ struct PopoverContentView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Spacer()
-            } else if let lastRefreshed {
-                Text(lastRefreshed, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Spacer()
             }
 
             Button("See all groups") {
@@ -151,10 +146,6 @@ struct PopoverContentView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-    }
-
-    private var lastRefreshed: Date? {
-        groupRepos.compactMap { store.summaries[$0.id]?.refreshedAt }.max()
     }
 
     private var aggregateTotals: (added: Int, removed: Int) {
