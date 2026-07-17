@@ -211,6 +211,21 @@ struct RepoDetailView: View {
                 }
             }
 
+            HStack(spacing: 12) {
+                Text("Recent commits")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 104, alignment: .leading)
+                Stepper(
+                    value: recentCommitLimitBinding(for: repository),
+                    in: RepositoryConfig.recentCommitLimitRange
+                ) {
+                    Text("\(repository.recentCommitLimit)")
+                        .monospacedDigit()
+                        .frame(width: 24, alignment: .trailing)
+                }
+                .fixedSize()
+            }
+
             Toggle("Count toward group totals", isOn: includedBinding(for: repository))
                 .toggleStyle(.switch)
 
@@ -243,6 +258,15 @@ struct RepoDetailView: View {
         }
         .onDisappear {
             commitCustomCommand(for: repository)
+        }
+    }
+
+    private func recentCommitLimitBinding(for repository: RepositoryConfig) -> Binding<Int> {
+        Binding {
+            store.repositories.first(where: { $0.id == repository.id })?.recentCommitLimit
+                ?? RepositoryConfig.defaultRecentCommitLimit
+        } set: { newValue in
+            store.updateRecentCommitLimit(for: repository.id, limit: newValue)
         }
     }
 

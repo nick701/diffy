@@ -1,5 +1,75 @@
 import Foundation
 
+public enum GitRecentCommitParser {
+    public static func parse(_ output: String) -> [RecentCommitSummary] {
+        let fields = output.split(separator: "\u{0}", omittingEmptySubsequences: false).map(String.init)
+        var commits: [RecentCommitSummary] = []
+        var index = 0
+
+        while index + 3 < fields.count {
+            let sha = fields[index]
+            let shortSHA = fields[index + 1]
+            let subject = fields[index + 2]
+            let timestamp = fields[index + 3]
+            index += 4
+
+            guard !sha.isEmpty, let seconds = TimeInterval(timestamp) else { continue }
+            commits.append(
+                RecentCommitSummary(
+                    sha: sha,
+                    shortSHA: shortSHA,
+                    subject: subject,
+                    committedAt: Date(timeIntervalSince1970: seconds)
+                )
+            )
+        }
+
+        return commits
+    }
+}
+
+public enum GitCommitNameStatusParser {
+    public static func parse(_ output: String) -> [GitNameStatusEntry] {
+        let fields = output.split(separator: "\u{0}", omittingEmptySubsequences: true).map(String.init)
+        var entries: [GitNameStatusEntry] = []
+        var index = 0
+
+        while index < fields.count {
+            let code = fields[index]
+            index += 1
+            guard index < fields.count else { break }
+            guard let status = status(for: code) else {
+                index += 1
+                continue
+            }
+
+            if status == .renamed || status == .copied {
+                guard index + 1 < fields.count else { break }
+                entries.append(
+                    GitNameStatusEntry(path: fields[index + 1], previousPath: fields[index], status: status)
+                )
+                index += 2
+            } else {
+                entries.append(GitNameStatusEntry(path: fields[index], status: status))
+                index += 1
+            }
+        }
+
+        return entries
+    }
+
+    private static func status(for code: String) -> GitChangeStatus? {
+        switch code.first {
+        case "M", "T": .modified
+        case "A": .added
+        case "D": .deleted
+        case "R": .renamed
+        case "C": .copied
+        default: nil
+        }
+    }
+}
+
 public enum GitNumstatParser {
     /// Parses `git diff --numstat -z` output. Records are NUL-terminated;
     /// renames take the form `<added>\t<removed>\t\0<oldpath>\0<newpath>\0`,

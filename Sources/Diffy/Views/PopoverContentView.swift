@@ -169,8 +169,8 @@ struct PopoverContentView: View {
         return (added, removed)
     }
 
-    private func copyPath(_ file: ChangedFileSummary, in repository: RepositoryConfig) {
-        let path = URL(fileURLWithPath: repository.path).appendingPathComponent(file.path).path
+    private func copyPath(_ relativePath: String, in repository: RepositoryConfig) {
+        let path = URL(fileURLWithPath: repository.path).appendingPathComponent(relativePath).path
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(path, forType: .string)
         copyConfirmationID = UUID()
@@ -181,7 +181,10 @@ private struct RepoBlock: View {
     @ObservedObject var store: DiffyStore
     let repository: RepositoryConfig
     let groupColors: DiffColors
-    let onCopyPath: (ChangedFileSummary, RepositoryConfig) -> Void
+    let onCopyPath: (String, RepositoryConfig) -> Void
+
+    @State private var isHistoryExpanded = false
+    @State private var expandedCommitSHA: String?
 
     private var summary: RepoDiffSummary? {
         store.summaries[repository.id]
@@ -222,6 +225,8 @@ private struct RepoBlock: View {
                         .foregroundStyle(.tertiary)
                 }
             }
+
+            recentCommitsSection
         }
     }
 
@@ -251,13 +256,206 @@ private struct RepoBlock: View {
                         }
                         .contextMenu {
                             Button("Copy Full Path") {
-                                onCopyPath(file, repository)
+                                onCopyPath(file.path, repository)
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    private var history: CommitHistoryState? {
+        store.commitHistories[repository.id]
+    }
+
+    @ViewBuilder
+    private var recentCommitsSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                isHistoryExpanded.toggle()
+                if isHistoryExpanded {
+                    store.loadRecentCommits(repositoryID: repository.id)
+                } else {
+                    expandedCommitSHA = nil
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: isHistoryExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                    Text("Recent commits (\(repository.recentCommitLimit))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.25))
+                        .frame(height: 0.5)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isHistoryExpanded {
+                if history?.isLoading == true && history?.commits.isEmpty == true {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
+                } else if let error = history?.errorMessage, history?.commits.isEmpty == true {
+                    Text(error)
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                } else if history?.commits.isEmpty == true {
+                    Text("No commits yet")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                } else if let commits = history?.commits {
+                    VStack(spacing: 1) {
+                        ForEach(commits) { commit in
+                            commitRow(commit)
+                        }
+                    }
+                    if history?.isLoading == true {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .frame(maxWidth: .infinity)
+                    } else if let error = history?.errorMessage {
+                        Text(error)
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+        }
+    }
+
+    private func commitRow(_ commit: RecentCommitSummary) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Button {
+                if expandedCommitSHA == commit.sha {
+                    expandedCommitSHA = nil
+                } else {
+                    expandedCommitSHA = commit.sha
+                    store.loadCommitDetails(repositoryID: repository.id, sha: commit.sha)
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: expandedCommitSHA == commit.sha ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8, weight: .semibold))
+                        .frame(width: 8)
+                    Text(commit.shortSHA)
+                        .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(commit.subject.isEmpty ? "(no message)" : commit.subject)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 4)
+                    Text(commit.committedAt, style: .relative)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    publicationLabel(commit.publicationStatus)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if expandedCommitSHA == commit.sha {
+                commitDetails(for: commit.sha)
+                    .padding(.leading, 14)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func publicationLabel(_ status: CommitPublicationStatus) -> some View {
+        let title: String
+        let color: Color
+        let help: String
+        switch status {
+        case .onUpstream(let upstream):
+            title = "On upstream"
+            color = .green
+            help = "Reachable from \(upstream) according to local remote-tracking refs. Diffy does not fetch."
+        case .localOnly(let upstream):
+            title = "Local only"
+            color = .orange
+            help = "Not reachable from \(upstream) according to local remote-tracking refs. Diffy does not fetch."
+        case .noUpstream:
+            title = "No upstream"
+            color = .secondary
+            help = "This branch has no configured upstream."
+        }
+        return Text(title)
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .help(help)
+    }
+
+    @ViewBuilder
+    private func commitDetails(for sha: String) -> some View {
+        if let details = store.commitDetails[repository.id], details.sha == sha {
+            if details.isLoading {
+                ProgressView()
+                    .controlSize(.mini)
+                    .frame(maxWidth: .infinity)
+            } else if let error = details.errorMessage {
+                Text(error)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            } else if details.files.isEmpty {
+                Text("No changed files")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(details.files) { file in
+                        HistoricalFileRow(file: file)
+                            .contextMenu {
+                                Button("Copy Full Path") {
+                                    onCopyPath(file.path, repository)
+                                }
+                                Button("Open Current Version") {
+                                    EditorLauncher.openCurrentVersion(path: file.path, in: repository)
+                                }
+                                .disabled(!EditorLauncher.currentVersionExists(path: file.path, in: repository))
+                            }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct HistoricalFileRow: View {
+    let file: HistoricalChangedFile
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(file.displayStatus)
+                .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 14, alignment: .leading)
+
+            Text(file.previousPath.map { "\($0) → \(file.path)" } ?? file.path)
+                .font(.system(.caption2, design: .monospaced))
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Spacer(minLength: 6)
+
+            if file.isBinary {
+                Text("binary")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("+\(file.addedLines) -\(file.removedLines)")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 }
 

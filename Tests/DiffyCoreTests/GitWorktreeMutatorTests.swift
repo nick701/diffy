@@ -30,6 +30,8 @@ final class GitWorktreeMutatorTests: XCTestCase {
                 XCTAssertEqual(message, "dirty working tree")
             case .invalidRepository:
                 XCTFail("Expected commandFailed, got invalidRepository")
+            case .invalidCommit:
+                XCTFail("Expected commandFailed, got invalidCommit")
             }
         }
     }

@@ -7,11 +7,29 @@ enum GroupRemovalMode {
     case deleteRepos
 }
 
+struct CommitHistoryState: Equatable {
+    var requestID: UUID
+    var limit: Int
+    var commits: [RecentCommitSummary]
+    var isLoading: Bool
+    var errorMessage: String?
+}
+
+struct CommitDetailsState: Equatable {
+    var requestID: UUID
+    var sha: String
+    var files: [HistoricalChangedFile]
+    var isLoading: Bool
+    var errorMessage: String?
+}
+
 @MainActor
 final class DiffyStore: ObservableObject {
     @Published private(set) var groups: [RepositoryGroup] = []
     @Published private(set) var repositories: [RepositoryConfig] = []
     @Published private(set) var summaries: [UUID: RepoDiffSummary] = [:]
+    @Published private(set) var commitHistories: [UUID: CommitHistoryState] = [:]
+    @Published private(set) var commitDetails: [UUID: CommitDetailsState] = [:]
     /// Latest porcelain output keyed by parent (user-added) repo UUID. Transient — not persisted.
     /// Read by the UI via `isGitMainWorktree(repositoryID:)`.
     @Published private(set) var lastWorktreeEntries: [UUID: [WorktreeEntry]] = [:]
@@ -190,6 +208,129 @@ final class DiffyStore: ObservableObject {
         repositories[index].isHidden = isHidden
         updateSummaryRepository(repositories[index])
         save()
+    }
+
+    func updateRecentCommitLimit(for repositoryID: UUID, limit: Int) {
+        guard let index = repositories.firstIndex(where: { $0.id == repositoryID }) else { return }
+        let clamped = RepositoryConfig.clampedRecentCommitLimit(limit)
+        guard repositories[index].recentCommitLimit != clamped else { return }
+
+        repositories[index].recentCommitLimit = clamped
+        updateSummaryRepository(repositories[index])
+        save()
+
+        if commitHistories[repositoryID] != nil {
+            loadRecentCommits(repositoryID: repositoryID, force: true)
+        }
+    }
+
+    func loadRecentCommits(repositoryID: UUID, force: Bool = false) {
+        guard let repository = repositories.first(where: { $0.id == repositoryID }) else { return }
+        let limit = repository.recentCommitLimit
+        let existing = commitHistories[repositoryID]
+
+        if !force,
+           let existing,
+           existing.limit == limit,
+           existing.isLoading || existing.errorMessage == nil {
+            return
+        }
+
+        let requestID = UUID()
+        commitHistories[repositoryID] = CommitHistoryState(
+            requestID: requestID,
+            limit: limit,
+            commits: existing?.limit == limit ? existing?.commits ?? [] : [],
+            isLoading: true,
+            errorMessage: nil
+        )
+
+        Task.detached(priority: .utility) { [gitClient] in
+            do {
+                let commits = try gitClient.recentCommits(repository, limit: limit)
+                await MainActor.run {
+                    guard let current = self.repositories.first(where: { $0.id == repositoryID }),
+                          current.recentCommitLimit == limit,
+                          self.commitHistories[repositoryID]?.limit == limit,
+                          self.commitHistories[repositoryID]?.requestID == requestID
+                    else { return }
+
+                    self.commitHistories[repositoryID] = CommitHistoryState(
+                        requestID: requestID,
+                        limit: limit,
+                        commits: commits,
+                        isLoading: false,
+                        errorMessage: nil
+                    )
+                    let visibleSHAs = Set(commits.map(\.sha))
+                    if let details = self.commitDetails[repositoryID], !visibleSHAs.contains(details.sha) {
+                        self.commitDetails.removeValue(forKey: repositoryID)
+                    }
+                }
+            } catch {
+                let message = error.localizedDescription
+                await MainActor.run {
+                    guard self.repositories.contains(where: { $0.id == repositoryID }),
+                          self.commitHistories[repositoryID]?.limit == limit,
+                          self.commitHistories[repositoryID]?.requestID == requestID
+                    else { return }
+                    self.commitHistories[repositoryID]?.isLoading = false
+                    self.commitHistories[repositoryID]?.errorMessage = message
+                }
+            }
+        }
+    }
+
+    func loadCommitDetails(repositoryID: UUID, sha: String) {
+        guard let repository = repositories.first(where: { $0.id == repositoryID }),
+              let requestedLimit = commitHistories[repositoryID]?.limit,
+              commitHistories[repositoryID]?.commits.contains(where: { $0.sha == sha }) == true
+        else { return }
+
+        if let existing = commitDetails[repositoryID],
+           existing.sha == sha,
+           existing.isLoading || existing.errorMessage == nil {
+            return
+        }
+
+        let requestID = UUID()
+        commitDetails[repositoryID] = CommitDetailsState(
+            requestID: requestID, sha: sha, files: [], isLoading: true, errorMessage: nil
+        )
+
+        Task.detached(priority: .utility) { [gitClient] in
+            do {
+                let files = try gitClient.commitDetails(repository, sha: sha)
+                await MainActor.run {
+                    guard self.repositories.contains(where: { $0.id == repositoryID }),
+                          self.commitHistories[repositoryID]?.limit == requestedLimit,
+                          self.commitHistories[repositoryID]?.commits.contains(where: { $0.sha == sha }) == true,
+                          self.commitDetails[repositoryID]?.requestID == requestID
+                    else { return }
+                    self.commitDetails[repositoryID] = CommitDetailsState(
+                        requestID: requestID, sha: sha, files: files, isLoading: false, errorMessage: nil
+                    )
+                }
+            } catch {
+                let message = error.localizedDescription
+                await MainActor.run {
+                    guard self.repositories.contains(where: { $0.id == repositoryID }),
+                          self.commitHistories[repositoryID]?.limit == requestedLimit,
+                          self.commitHistories[repositoryID]?.commits.contains(where: { $0.sha == sha }) == true,
+                          self.commitDetails[repositoryID]?.requestID == requestID
+                    else { return }
+                    self.commitDetails[repositoryID] = CommitDetailsState(
+                        requestID: requestID, sha: sha, files: [], isLoading: false, errorMessage: message
+                    )
+                }
+            }
+        }
+    }
+
+    func refreshLoadedRecentCommits(groupID: UUID) {
+        for repository in repositories where repository.groupID == groupID && commitHistories[repository.id] != nil {
+            loadRecentCommits(repositoryID: repository.id, force: true)
+        }
     }
 
     func moveRepository(_ repositoryID: UUID, toGroup groupID: UUID) {
@@ -559,6 +700,8 @@ final class DiffyStore: ObservableObject {
     private func tearDownRow(id: UUID) {
         repositories.removeAll { $0.id == id }
         summaries.removeValue(forKey: id)
+        commitHistories.removeValue(forKey: id)
+        commitDetails.removeValue(forKey: id)
         watchers[id]?.stop()
         watchers.removeValue(forKey: id)
     }

@@ -148,22 +148,23 @@ final class StatusItemManager: NSObject {
     private func handleClick(groupID: UUID, event: NSEvent?) {
         guard let item = items[groupID] else { return }
         guard let event = event ?? NSApp.currentEvent else {
-            togglePopover(item: item)
+            togglePopover(groupID: groupID, item: item)
             return
         }
 
         if event.type == .rightMouseUp {
             showContextMenu(for: item)
         } else {
-            togglePopover(item: item)
+            togglePopover(groupID: groupID, item: item)
         }
     }
 
-    private func togglePopover(item: GroupStatusItem) {
+    private func togglePopover(groupID: UUID, item: GroupStatusItem) {
         guard let button = item.statusItem.button else { return }
         if item.popover.isShown {
             item.popover.performClose(nil)
         } else {
+            store.refreshLoadedRecentCommits(groupID: groupID)
             for other in items.values where other.popover.isShown {
                 other.popover.performClose(nil)
             }

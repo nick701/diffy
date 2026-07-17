@@ -5,8 +5,22 @@ import Foundation
 enum EditorLauncher {
     static func open(file: ChangedFileSummary, in repository: RepositoryConfig) {
         guard file.isOpenableFromWorkingTree else { return }
+        open(relativePath: file.path, in: repository)
+    }
 
-        let fileURL = URL(fileURLWithPath: repository.path).appendingPathComponent(file.path)
+    static func openCurrentVersion(path: String, in repository: RepositoryConfig) {
+        guard currentVersionExists(path: path, in: repository) else { return }
+        open(relativePath: path, in: repository)
+    }
+
+    static func currentVersionExists(path: String, in repository: RepositoryConfig) -> Bool {
+        FileManager.default.fileExists(
+            atPath: URL(fileURLWithPath: repository.path).appendingPathComponent(path).path
+        )
+    }
+
+    private static func open(relativePath: String, in repository: RepositoryConfig) {
+        let fileURL = URL(fileURLWithPath: repository.path).appendingPathComponent(relativePath)
 
         switch repository.editor {
         case .systemDefault:

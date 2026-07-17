@@ -2,6 +2,49 @@ import XCTest
 @testable import DiffyCore
 
 final class GitClientIntegrationTests: XCTestCase {
+    func testRecentCommitsClassifiesPushedAndLocalOnlyAndHonorsLimit() throws {
+        let repo = try TemporaryGitRepository()
+        let remote = repo.url.deletingLastPathComponent().appendingPathComponent("remote-" + UUID().uuidString + ".git")
+        defer { try? FileManager.default.removeItem(at: remote) }
+        try repo.git("init", "--bare", remote.path)
+
+        try repo.write("tracked.txt", contents: "one\n")
+        try repo.git("add", "tracked.txt")
+        try repo.git("commit", "-m", "pushed 🚀")
+        try repo.git("remote", "add", "origin", remote.path)
+        try repo.git("push", "-u", "origin", "HEAD")
+
+        try repo.write("local.txt", contents: "two\n")
+        try repo.git("add", "local.txt")
+        try repo.git("commit", "-m", "local")
+
+        let config = RepositoryConfig(displayName: "Temp", path: repo.path, groupID: UUID())
+        let commits = try GitClient().recentCommits(config, limit: 5)
+        let limited = try GitClient().recentCommits(config, limit: 1)
+        let rootFiles = try GitClient().commitDetails(config, sha: commits[1].sha)
+
+        XCTAssertEqual(commits.map(\.subject), ["local", "pushed 🚀"])
+        guard case .localOnly(let localUpstream) = commits[0].publicationStatus else {
+            return XCTFail("Newest commit should be local only")
+        }
+        guard case .onUpstream(let pushedUpstream) = commits[1].publicationStatus else {
+            return XCTFail("Initial commit should be on upstream")
+        }
+        XCTAssertEqual(localUpstream, pushedUpstream)
+        XCTAssertTrue(localUpstream.hasPrefix("origin/"))
+        XCTAssertEqual(limited.map(\.subject), ["local"])
+        XCTAssertEqual(rootFiles.first?.status, .added)
+        XCTAssertEqual(rootFiles.first?.path, "tracked.txt")
+    }
+
+    func testCommitDetailsRejectsNonSHARevision() {
+        let config = RepositoryConfig(displayName: "Temp", path: "/tmp", groupID: UUID())
+
+        XCTAssertThrowsError(try GitClient().commitDetails(config, sha: "HEAD")) { error in
+            XCTAssertEqual(error.localizedDescription, "Invalid commit identifier: HEAD")
+        }
+    }
+
     func testDiscoversWorktreesIncludingBranchAndDetachedStates() throws {
         let repo = try TemporaryGitRepository()
         try repo.write("tracked.txt", contents: "one\n")

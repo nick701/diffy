@@ -2,6 +2,47 @@ import XCTest
 @testable import DiffyCore
 
 final class GitParsingTests: XCTestCase {
+    func testParsesRecentCommitsIncludingUnicodeAndEmptySubject() {
+        let output = [
+            String(repeating: "a", count: 40), "aaaaaaa", "Add 🚀 support", "1",
+            String(repeating: "b", count: 40), "bbbbbbb", "", "2",
+        ].joined(separator: "\u{0}") + "\u{0}"
+
+        let commits = GitRecentCommitParser.parse(output)
+
+        XCTAssertEqual(commits.count, 2)
+        XCTAssertEqual(commits[0].subject, "Add 🚀 support")
+        XCTAssertEqual(commits[0].committedAt, Date(timeIntervalSince1970: 1))
+        XCTAssertEqual(commits[1].subject, "")
+        XCTAssertEqual(commits[1].publicationStatus, .noUpstream)
+        XCTAssertTrue(GitRecentCommitParser.parse("").isEmpty)
+    }
+
+    func testParsesCommitNameStatusIncludingRenameCopyAndUnicode() {
+        let output = [
+            "A", "new.swift",
+            "M", "Sources/мир.swift",
+            "D", "old.swift",
+            "R100", "before.swift", "after.swift",
+            "C90", "source.swift", "copy.swift",
+        ].joined(separator: "\u{0}") + "\u{0}"
+
+        let entries = GitCommitNameStatusParser.parse(output)
+
+        XCTAssertEqual(entries.count, 5)
+        XCTAssertEqual(entries[0], GitNameStatusEntry(path: "new.swift", status: .added))
+        XCTAssertEqual(entries[1], GitNameStatusEntry(path: "Sources/мир.swift", status: .modified))
+        XCTAssertEqual(entries[2], GitNameStatusEntry(path: "old.swift", status: .deleted))
+        XCTAssertEqual(
+            entries[3],
+            GitNameStatusEntry(path: "after.swift", previousPath: "before.swift", status: .renamed)
+        )
+        XCTAssertEqual(
+            entries[4],
+            GitNameStatusEntry(path: "copy.swift", previousPath: "source.swift", status: .copied)
+        )
+    }
+
     func testParsesNumstatForTextBinaryAndDeletedFiles() {
         let output = "12\t3\tSources/App.swift\u{0}-\t-\tAssets/logo.png\u{0}0\t8\tSources/Removed.swift\u{0}"
 

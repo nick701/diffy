@@ -49,6 +49,8 @@ final class StoredStateMigrationTests: XCTestCase {
 
         XCTAssertFalse(alpha?.isHidden ?? true)
         XCTAssertFalse(beta?.isHidden ?? true)
+        XCTAssertEqual(alpha?.recentCommitLimit, RepositoryConfig.defaultRecentCommitLimit)
+        XCTAssertEqual(beta?.recentCommitLimit, RepositoryConfig.defaultRecentCommitLimit)
     }
 
     func testDecodesEnvelopeShapeUnchanged() throws {

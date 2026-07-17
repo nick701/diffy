@@ -1,6 +1,9 @@
 import Foundation
 
 public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
+    public static let defaultRecentCommitLimit = 5
+    public static let recentCommitLimitRange = 1...20
+
     public var id: UUID
     public var displayName: String
     public var path: String
@@ -11,6 +14,7 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
     public var parentRepositoryID: UUID?
     /// True for rows that Diffy manages itself (auto-discovered worktrees).
     public var isAutoManaged: Bool
+    public var recentCommitLimit: Int
 
     public init(
         id: UUID = UUID(),
@@ -20,7 +24,8 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         groupID: UUID,
         isHidden: Bool = false,
         parentRepositoryID: UUID? = nil,
-        isAutoManaged: Bool = false
+        isAutoManaged: Bool = false,
+        recentCommitLimit: Int = RepositoryConfig.defaultRecentCommitLimit
     ) {
         self.id = id
         self.displayName = displayName
@@ -30,6 +35,7 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         self.isHidden = isHidden
         self.parentRepositoryID = parentRepositoryID
         self.isAutoManaged = isAutoManaged
+        self.recentCommitLimit = Self.clampedRecentCommitLimit(recentCommitLimit)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -41,6 +47,7 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         case isHidden
         case parentRepositoryID
         case isAutoManaged
+        case recentCommitLimit
     }
 
     public init(from decoder: Decoder) throws {
@@ -53,6 +60,9 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         isHidden = try container.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
         parentRepositoryID = try container.decodeIfPresent(UUID.self, forKey: .parentRepositoryID)
         isAutoManaged = try container.decodeIfPresent(Bool.self, forKey: .isAutoManaged) ?? false
+        recentCommitLimit = Self.clampedRecentCommitLimit(
+            try container.decodeIfPresent(Int.self, forKey: .recentCommitLimit) ?? Self.defaultRecentCommitLimit
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -65,6 +75,11 @@ public struct RepositoryConfig: Identifiable, Codable, Hashable, Sendable {
         try container.encode(isHidden, forKey: .isHidden)
         try container.encodeIfPresent(parentRepositoryID, forKey: .parentRepositoryID)
         try container.encode(isAutoManaged, forKey: .isAutoManaged)
+        try container.encode(recentCommitLimit, forKey: .recentCommitLimit)
+    }
+
+    public static func clampedRecentCommitLimit(_ value: Int) -> Int {
+        min(max(value, recentCommitLimitRange.lowerBound), recentCommitLimitRange.upperBound)
     }
 }
 
@@ -163,6 +178,74 @@ public enum BranchInfo: Equatable, Sendable {
     case detached(shortSHA: String)
     case bare
     case unknown
+}
+
+public enum CommitPublicationStatus: Equatable, Sendable {
+    case onUpstream(String)
+    case localOnly(String)
+    case noUpstream
+}
+
+public struct RecentCommitSummary: Identifiable, Equatable, Sendable {
+    public var id: String { sha }
+    public var sha: String
+    public var shortSHA: String
+    public var subject: String
+    public var committedAt: Date
+    public var publicationStatus: CommitPublicationStatus
+
+    public init(
+        sha: String,
+        shortSHA: String,
+        subject: String,
+        committedAt: Date,
+        publicationStatus: CommitPublicationStatus = .noUpstream
+    ) {
+        self.sha = sha
+        self.shortSHA = shortSHA
+        self.subject = subject
+        self.committedAt = committedAt
+        self.publicationStatus = publicationStatus
+    }
+}
+
+public struct GitNameStatusEntry: Equatable, Sendable {
+    public var path: String
+    public var previousPath: String?
+    public var status: GitChangeStatus
+
+    public init(path: String, previousPath: String? = nil, status: GitChangeStatus) {
+        self.path = path
+        self.previousPath = previousPath
+        self.status = status
+    }
+}
+
+public struct HistoricalChangedFile: Identifiable, Equatable, Sendable {
+    public var id: String { path }
+    public var displayStatus: String { status.displayStatus }
+    public var path: String
+    public var previousPath: String?
+    public var status: GitChangeStatus
+    public var addedLines: Int
+    public var removedLines: Int
+    public var isBinary: Bool
+
+    public init(
+        path: String,
+        previousPath: String? = nil,
+        status: GitChangeStatus,
+        addedLines: Int,
+        removedLines: Int,
+        isBinary: Bool
+    ) {
+        self.path = path
+        self.previousPath = previousPath
+        self.status = status
+        self.addedLines = addedLines
+        self.removedLines = removedLines
+        self.isBinary = isBinary
+    }
 }
 
 public struct RepoDiffSummary: Equatable, Sendable {

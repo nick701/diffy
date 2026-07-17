@@ -3,11 +3,13 @@ import Foundation
 public enum GitClientError: Error, LocalizedError, Sendable {
     case commandFailed(String)
     case invalidRepository(String)
+    case invalidCommit(String)
 
     public var errorDescription: String? {
         switch self {
         case .commandFailed(let message): message
         case .invalidRepository(let path): "Not a readable git repository: \(path)"
+        case .invalidCommit(let sha): "Invalid commit identifier: \(sha)"
         }
     }
 }
@@ -155,6 +157,88 @@ public struct GitClient: @unchecked Sendable {
         } catch {
             throw GitClientError.invalidRepository(path)
         }
+    }
+
+    public func recentCommits(_ repository: RepositoryConfig, limit: Int? = nil) throws -> [RecentCommitSummary] {
+        guard fileManager.fileExists(atPath: repository.path) else {
+            throw GitClientError.invalidRepository(repository.path)
+        }
+
+        do {
+            _ = try runner.run(GitCommandFactory.command(for: .hasHead, repositoryPath: repository.path))
+        } catch GitClientError.commandFailed {
+            return []
+        }
+
+        let resolvedLimit = RepositoryConfig.clampedRecentCommitLimit(limit ?? repository.recentCommitLimit)
+        let output = try runner.run(
+            GitCommandFactory.recentCommits(repositoryPath: repository.path, limit: resolvedLimit)
+        )
+        var commits = GitRecentCommitParser.parse(output)
+        guard !commits.isEmpty else { return [] }
+
+        let upstream: String
+        do {
+            upstream = try runner
+                .run(GitCommandFactory.command(for: .upstreamName, repositoryPath: repository.path))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch GitClientError.commandFailed {
+            return commits
+        }
+        guard !upstream.isEmpty else { return commits }
+
+        let localOnlyOutput = try runner.run(
+            GitCommandFactory.commitsNotOnUpstream(
+                repositoryPath: repository.path,
+                upstream: upstream,
+                limit: resolvedLimit
+            )
+        )
+        let localOnly = Set(localOnlyOutput.split(whereSeparator: \.isWhitespace).map(String.init))
+
+        for index in commits.indices {
+            commits[index].publicationStatus = localOnly.contains(commits[index].sha)
+                ? .localOnly(upstream)
+                : .onUpstream(upstream)
+        }
+        return commits
+    }
+
+    public func commitDetails(_ repository: RepositoryConfig, sha: String) throws -> [HistoricalChangedFile] {
+        guard fileManager.fileExists(atPath: repository.path) else {
+            throw GitClientError.invalidRepository(repository.path)
+        }
+        guard Self.isFullObjectID(sha) else {
+            throw GitClientError.invalidCommit(sha)
+        }
+
+        let names = try runner.run(
+            GitCommandFactory.commitNameStatus(repositoryPath: repository.path, sha: sha)
+        )
+        let numstat = try runner.run(
+            GitCommandFactory.commitNumstat(repositoryPath: repository.path, sha: sha)
+        )
+        let stats = GitNumstatParser.parse(numstat)
+
+        return GitCommitNameStatusParser.parse(names).map { entry in
+            let stat = stats[entry.path] ?? FileLineStat(
+                addedLines: 0,
+                removedLines: 0,
+                isBinary: false
+            )
+            return HistoricalChangedFile(
+                path: entry.path,
+                previousPath: entry.previousPath,
+                status: entry.status,
+                addedLines: stat.addedLines,
+                removedLines: stat.removedLines,
+                isBinary: stat.isBinary
+            )
+        }
+    }
+
+    private static func isFullObjectID(_ value: String) -> Bool {
+        (value.count == 40 || value.count == 64) && value.allSatisfy(\.isHexDigit)
     }
 
     private func statForUntrackedFile(repositoryPath: String, relativePath: String) -> FileLineStat {

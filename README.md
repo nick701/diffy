@@ -10,9 +10,9 @@ Diffy is local-only. It does not use GitHub, GitLab, Bitbucket, PRs, issues, clo
 
 ## Status
 
-v0.4.6 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not notarized). Install instructions below include the required manual Gatekeeper quarantine-clearing step.
+v0.5.0 — available via Homebrew Cask. The app uses macOS 26 Liquid Glass APIs and is ad-hoc signed (not Developer ID signed or notarized). Install instructions below include the required manual Gatekeeper quarantine-clearing step.
 
-This release adds full-path copying for changed files in the menu-bar popover, plus version and release-documentation maintenance.
+This release adds on-demand recent commit history to every repository in the menu-bar popover, with per-commit changed-file statistics and local upstream status.
 
 Diffy is feature-complete for its original scope; future updates are expected to focus on maintenance and bug fixes rather than major new features.
 
@@ -21,6 +21,7 @@ Diffy is feature-complete for its original scope; future updates are expected to
 - **Groups**: every repo belongs to a group, and each group owns one menu-bar icon, one color scheme, and an optional small label (1–2 chars or an emoji, positioned around the `+/-` counts). New repos default to their own single-repo group; combine or split groups by drag-drop in the main window. A group with N repos shows the aggregate `+x / -y` of its (non-hidden) members.
 - **Hide a group from the menu bar** with an eye toggle in the sidebar header — the icon disappears entirely until toggled back on. Per-repo "Exclude from group totals" is also available for silencing a noisy repo within a multi-repo group without removing the icon.
 - Left-click any group's menu-bar icon opens a popover listing **that group's** repos with their staged and unstaged files — click a file to jump straight into your editor, or right-click it to copy its full path. "See all groups" opens the full main window.
+- Expand **Recent commits** under any repository to see its last 1–20 commits (configured per repository), including short SHA, subject, time, and whether each commit is on the configured upstream, local only, or has no upstream. Expanding a commit shows file statuses and `+/-` totals without source-code hunks. Historical rows never open automatically; their context menu can copy the path or explicitly open the current working-tree version when it exists.
 - Main window: sidebar with one section per group (drag-drop repos between sections, reorder groups, edit colors / labels / names / hidden state), detail pane with per-repo settings.
 - Window close hides Diffy back to the menu bar (no quit); ⌘Q or right-click → Quit to actually exit.
 - Per-repo detail pane: staged and unstaged changed-file sections with status labels (`M`, `A`, `D`, `U`, `C`, `!`) and per-file `+a / -b`.
@@ -89,4 +90,4 @@ Diffy includes Sparkle integration, but update checks are enabled only in releas
 
 ## Read-Only Guarantee
 
-Diffy is read-only with one explicit, user-initiated exception: removing a linked worktree via the in-app confirmation dialog (which runs `git worktree remove <path>` without `--force`). All other git operations Diffy performs (`diff`, `status`, `worktree list`, `rev-parse --is-inside-work-tree`) are strictly observational, run with `GIT_OPTIONAL_LOCKS=0` and `--no-optional-locks`. Diffy never stages, commits, checks out, cleans, resets, rebases, merges, or otherwise mutates a repository's working tree.
+Diffy is read-only with one explicit, user-initiated exception: removing a linked worktree via the in-app confirmation dialog (which runs `git worktree remove <path>` without `--force`). All other git operations Diffy performs (`diff`, `status`, `log`, `show`, `rev-list`, observational `rev-parse`, and `worktree list`) are strictly observational, run with `GIT_OPTIONAL_LOCKS=0` and `--no-optional-locks`. Commit publication labels compare against local remote-tracking refs; Diffy never fetches. Diffy never stages, commits, checks out, cleans, resets, rebases, merges, or otherwise mutates a repository's working tree.

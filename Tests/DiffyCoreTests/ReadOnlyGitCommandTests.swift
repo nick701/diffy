@@ -25,6 +25,8 @@ final class ReadOnlyGitCommandTests: XCTestCase {
 
         for command in commands {
             XCTAssertTrue(Set(command.arguments).isDisjoint(with: banned), "Unexpected mutating git argument in \(command.arguments)")
+            XCTAssertFalse(command.arguments.contains("-p"))
+            XCTAssertFalse(command.arguments.contains("--patch"))
         }
     }
 
@@ -35,5 +37,44 @@ final class ReadOnlyGitCommandTests: XCTestCase {
             ["-C", "/tmp/repo", "--no-optional-locks", "-c", "core.quotePath=false", "worktree", "list", "--porcelain"]
         )
         XCTAssertEqual(command.environment["GIT_OPTIONAL_LOCKS"], "0")
+    }
+
+    func testRecentCommitCommandShapesAndLimits() {
+        let recent = GitCommandFactory.recentCommits(repositoryPath: "/tmp/repo", limit: 99)
+        XCTAssertEqual(
+            recent.arguments,
+            [
+                "-C", "/tmp/repo", "--no-optional-locks", "-c", "core.quotePath=false",
+                "log", "-n", "20", "-z", "--format=%H%x00%h%x00%s%x00%ct", "HEAD", "--",
+            ]
+        )
+
+        let local = GitCommandFactory.commitsNotOnUpstream(
+            repositoryPath: "/tmp/repo",
+            upstream: "origin/main",
+            limit: 0
+        )
+        XCTAssertEqual(
+            local.arguments,
+            [
+                "-C", "/tmp/repo", "--no-optional-locks", "-c", "core.quotePath=false",
+                "rev-list", "--max-count=1", "HEAD", "--not", "origin/main", "--",
+            ]
+        )
+    }
+
+    func testCommitDetailCommandShapes() {
+        let sha = String(repeating: "a", count: 40)
+        let commands = [
+            (GitCommandFactory.commitNameStatus(repositoryPath: "/tmp/repo", sha: sha), "--name-status"),
+            (GitCommandFactory.commitNumstat(repositoryPath: "/tmp/repo", sha: sha), "--numstat"),
+        ]
+
+        for (command, format) in commands {
+            XCTAssertEqual(Array(command.arguments.suffix(10)), [
+                "show", "--first-parent", "--root", "--find-renames", "--find-copies-harder",
+                "--format=", format, "-z", sha, "--",
+            ])
+        }
     }
 }

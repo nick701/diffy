@@ -105,6 +105,20 @@ final class DiffyStoreBehaviorTests: XCTestCase {
         XCTAssertNotNil(store.lastLoadError)
     }
 
+    func testRecentCommitLimitPersistsWithoutEagerHistoryLoading() throws {
+        let group = RepositoryGroup(name: "Group")
+        let repository = RepositoryConfig(displayName: "repo", path: "/tmp/repo", groupID: group.id)
+        let storageURL = try writeState(groups: [group], repositories: [repository])
+        let store = DiffyStore(storageURL: storageURL)
+        store.load()
+
+        XCTAssertNil(store.commitHistories[repository.id])
+        store.updateRecentCommitLimit(for: repository.id, limit: 2)
+
+        let persisted = try StoredStateMigration.decode(Data(contentsOf: storageURL))
+        XCTAssertEqual(persisted.repositories.first?.recentCommitLimit, 2)
+    }
+
     // MARK: - Removal cascades (git-free)
 
     func testRemoveRepositoryCascadesToAutoManagedChildren() throws {
