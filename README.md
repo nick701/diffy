@@ -87,6 +87,14 @@ xattr -dr com.apple.quarantine /Applications/Diffy.app
 
 Diffy includes Sparkle integration, but update checks are enabled only in release bundles that include a Sparkle appcast URL and EdDSA public key. See `docs/release.md`.
 
+## License
+
+Copyright (C) 2026 Nick Tiliakos.
+
+Diffy is free software licensed under the GNU General Public License, version 3 only. You may redistribute and modify it under the terms in [LICENSE](LICENSE).
+
+Released app bundles include `LICENSE`, `THIRD_PARTY_NOTICES.txt`, and `SOURCE_CODE.md` in `Diffy.app/Contents/Resources`.
+
 ## Read-Only Guarantee
 
 Diffy is read-only with one explicit, user-initiated exception: removing a linked worktree via the in-app confirmation dialog (which runs `git worktree remove <path>` without `--force`). All other git operations Diffy performs (`diff`, `status`, `log`, `show`, `rev-list`, observational `rev-parse`, and `worktree list`) are strictly observational, run with `GIT_OPTIONAL_LOCKS=0` and `--no-optional-locks`. Commit publication labels compare against local remote-tracking refs; Diffy never fetches. Diffy never stages, commits, checks out, cleans, resets, rebases, merges, or otherwise mutates a repository's working tree.

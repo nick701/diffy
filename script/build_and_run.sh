@@ -64,6 +64,9 @@ fi
 if [[ -d "$ROOT_DIR/Resources/EditorIcons" ]]; then
   cp -R "$ROOT_DIR/Resources/EditorIcons" "$RESOURCES_DIR"
 fi
+cp "$ROOT_DIR/LICENSE" "$RESOURCES_DIR/LICENSE"
+cp "$ROOT_DIR/Resources/THIRD_PARTY_NOTICES.txt" "$RESOURCES_DIR/THIRD_PARTY_NOTICES.txt"
+cp "$ROOT_DIR/Resources/SOURCE_CODE.md" "$RESOURCES_DIR/SOURCE_CODE.md"
 
 SPARKLE_FRAMEWORK="$(find "$ROOT_DIR/.build" -path '*/Sparkle.framework' -type d | head -n 1 || true)"
 if [[ -n "$SPARKLE_FRAMEWORK" ]]; then
