@@ -53,11 +53,30 @@ final class DiffyStoreBehaviorTests: XCTestCase {
         let invalidRepo = tempDir.appendingPathComponent("not-a-repo")
         try FileManager.default.createDirectory(at: invalidRepo, withIntermediateDirectories: true)
 
-        store.addRepository(path: invalidRepo.path)
+        store.addRepository(path: invalidRepo.path, destination: .newGroup)
 
         XCTAssertTrue(store.groups.isEmpty)
         XCTAssertTrue(store.repositories.isEmpty)
         XCTAssertEqual(store.lastAddError, "Not a readable git repository: \(invalidRepo.path)")
+    }
+
+    func testAddingRepositoryUsesSelectedExistingGroup() throws {
+        let tempDir = try makeTemporaryDirectory()
+        let repositoryURL = tempDir.appendingPathComponent("repository")
+        try FileManager.default.createDirectory(at: repositoryURL, withIntermediateDirectories: true)
+        try runGit(["init"], in: repositoryURL)
+
+        let group = RepositoryGroup(name: "Existing")
+        let storageURL = try writeState(groups: [group], repositories: [])
+        let store = DiffyStore(storageURL: storageURL)
+        defer { store.stop() }
+        store.load()
+
+        store.addRepository(path: repositoryURL.path, destination: .existingGroup(group.id))
+
+        XCTAssertEqual(store.groups.map(\.id), [group.id])
+        XCTAssertEqual(store.repositories.count, 1)
+        XCTAssertEqual(store.repositories.first?.groupID, group.id)
     }
 
     func testAddingExistingAutoManagedPathPromotesWithoutCreatingDuplicate() throws {
@@ -83,7 +102,7 @@ final class DiffyStoreBehaviorTests: XCTestCase {
         defer { store.stop() }
 
         store.load()
-        store.addRepository(path: childURL.path)
+        store.addRepository(path: childURL.path, destination: .existingGroup(group.id))
 
         XCTAssertEqual(store.repositories.count, 2)
         XCTAssertEqual(store.groups.count, 1)
@@ -242,7 +261,7 @@ final class DiffyStoreBehaviorTests: XCTestCase {
 
         let store = DiffyStore(storageURL: tempDir.appendingPathComponent("repositories.json"))
         try waitForRepositoryCount(store, count: 2) {
-            store.addRepository(path: repoURL.path)
+            store.addRepository(path: repoURL.path, destination: .newGroup)
         }
         return (store, repoURL, childURL)
     }

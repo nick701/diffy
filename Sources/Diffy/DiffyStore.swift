@@ -7,6 +7,11 @@ enum GroupRemovalMode {
     case deleteRepos
 }
 
+enum RepositoryDestination {
+    case existingGroup(UUID)
+    case newGroup
+}
+
 struct CommitHistoryState: Equatable {
     var requestID: UUID
     var limit: Int
@@ -125,13 +130,19 @@ final class DiffyStore: ObservableObject {
 
     // MARK: - Repositories
 
-    func addRepository(path: String) {
+    func addRepository(path: String, destination: RepositoryDestination) {
         let url = URL(fileURLWithPath: path)
         let canonical = canonicalPath(url.path)
 
         if let existing = repositories.first(where: { canonicalPath($0.path) == canonical }) {
             if existing.isAutoManaged {
-                promoteAutoManagedRepository(existing, toPath: url.path, displayName: url.lastPathComponent)
+                guard let groupID = destinationGroupID(for: destination, name: url.lastPathComponent) else { return }
+                promoteAutoManagedRepository(
+                    existing,
+                    toPath: url.path,
+                    displayName: url.lastPathComponent,
+                    groupID: groupID
+                )
             } else {
                 lastAddError = "This path is already tracked."
             }
@@ -145,13 +156,12 @@ final class DiffyStore: ObservableObject {
             return
         }
 
-        let group = RepositoryGroup(name: url.lastPathComponent)
-        groups.append(group)
+        guard let groupID = destinationGroupID(for: destination, name: url.lastPathComponent) else { return }
 
         let config = RepositoryConfig(
             displayName: url.lastPathComponent,
             path: url.path,
-            groupID: group.id
+            groupID: groupID
         )
         repositories.append(config)
         lastAddError = nil
@@ -159,15 +169,41 @@ final class DiffyStore: ObservableObject {
         seedRow(config)
     }
 
-    private func promoteAutoManagedRepository(_ repository: RepositoryConfig, toPath path: String, displayName: String) {
+    private func destinationGroupID(for destination: RepositoryDestination, name: String) -> UUID? {
+        switch destination {
+        case .existingGroup(let id):
+            guard groups.contains(where: { $0.id == id }) else {
+                lastAddError = "The selected group no longer exists."
+                return nil
+            }
+            return id
+        case .newGroup:
+            let group = RepositoryGroup(name: name)
+            groups.append(group)
+            return group.id
+        }
+    }
+
+    private func promoteAutoManagedRepository(
+        _ repository: RepositoryConfig,
+        toPath path: String,
+        displayName: String,
+        groupID: UUID
+    ) {
         guard let index = repositories.firstIndex(where: { $0.id == repository.id }) else { return }
         let oldParentID = repositories[index].parentRepositoryID
 
         repositories[index].displayName = displayName
         repositories[index].path = path
+        repositories[index].groupID = groupID
         repositories[index].parentRepositoryID = nil
         repositories[index].isAutoManaged = false
         updateSummaryRepository(repositories[index])
+
+        for childIndex in repositories.indices where repositories[childIndex].parentRepositoryID == repository.id {
+            repositories[childIndex].groupID = groupID
+            updateSummaryRepository(repositories[childIndex])
+        }
 
         restartWatcher(for: repositories[index])
         lastAddError = nil

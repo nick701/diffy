@@ -61,6 +61,9 @@ cp "$ROOT_DIR/.build/debug/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 if [[ -f "$ROOT_DIR/Resources/Diffy.icns" ]]; then
   cp "$ROOT_DIR/Resources/Diffy.icns" "$RESOURCES_DIR/Diffy.icns"
 fi
+if [[ -d "$ROOT_DIR/Resources/EditorIcons" ]]; then
+  cp -R "$ROOT_DIR/Resources/EditorIcons" "$RESOURCES_DIR"
+fi
 
 SPARKLE_FRAMEWORK="$(find "$ROOT_DIR/.build" -path '*/Sparkle.framework' -type d | head -n 1 || true)"
 if [[ -n "$SPARKLE_FRAMEWORK" ]]; then
@@ -85,7 +88,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.5.1</string>
+  <string>0.6.0</string>
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>LSMinimumSystemVersion</key>

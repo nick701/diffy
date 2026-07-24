@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="Diffy"
 BUNDLE_ID="com.nickt.diffy"
-VERSION="${1:-0.5.1}"
+VERSION="${1:-0.6.0}"
 BUILD_NUMBER="${2:-1}"
 DIST_DIR="$ROOT_DIR/dist"
 RELEASE_DIR="$DIST_DIR/release"
@@ -62,6 +62,9 @@ cp "$ROOT_DIR/.build/release/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 
 if [[ -f "$ROOT_DIR/Resources/Diffy.icns" ]]; then
   cp "$ROOT_DIR/Resources/Diffy.icns" "$RESOURCES_DIR/Diffy.icns"
+fi
+if [[ -d "$ROOT_DIR/Resources/EditorIcons" ]]; then
+  cp -R "$ROOT_DIR/Resources/EditorIcons" "$RESOURCES_DIR"
 fi
 
 SPARKLE_FRAMEWORK="$(find "$ROOT_DIR/.build" -path '*/Sparkle.framework' -type d | head -n 1 || true)"

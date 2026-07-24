@@ -20,7 +20,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Diffy"
+        window.title = "Manage Diffy"
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 880, height: 560)
